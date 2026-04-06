@@ -2,7 +2,7 @@ import { METRIC_KEYS, GROUPS, GROUP_KEYS, SEASON_EFFECTS } from "./constants.js"
 
 // Per-metric decay: higher metrics decay faster. decayMult from difficulty (default 1.0)
 export function calcDecay(val) {
-  return Math.max(1, Math.floor(val / 40));
+  return Math.max(1, Math.floor(val / 20) + 1);
 }
 
 export function applyDecay(metrics, decayMult = 1) {
@@ -51,17 +51,24 @@ export function calcApprovalChange(prevMetrics, newMetrics, debt) {
   const avgNew = METRIC_KEYS.reduce((s, k) => s + newMetrics[k], 0) / METRIC_KEYS.length;
   let change = (avgNew - avgOld) * 0.5;
   if (debt > 200) change -= 3;
-  if (METRIC_KEYS.some(k => newMetrics[k] < 20)) change -= 2;
+  for (const k of METRIC_KEYS) {
+    if (newMetrics[k] < 10) change -= 5;
+    else if (newMetrics[k] < 20) change -= 2;
+  }
   return Math.round(change);
 }
 
-// revenue: base 400 + pop*0.012 + economy*2 + culture*1.2, with optional taxMult
 export function calcRevenue(pop, metrics, taxMult = 1) {
-  return Math.round((400 + pop * 0.012 + metrics.economy * 2.0 + metrics.culture * 1.2) * taxMult);
+  const econF = metrics.economy / 100;
+  const base = 120 + pop * 0.004;
+  const bonus = econF * 180 + (metrics.culture / 100) * 40 + (metrics.infrastructure / 100) * 30;
+  return Math.round((base + bonus) * taxMult);
 }
 
-export function calcMandatoryExpenses(pop) {
-  return Math.round(200 + pop * 0.005);
+export function calcMandatoryExpenses(pop, metrics) {
+  const base = 180 + pop * 0.006;
+  const maintenance = METRIC_KEYS.reduce((s, k) => s + Math.max(0, (metrics[k] - 30) * 0.3), 0);
+  return Math.round(base + maintenance);
 }
 
 // migration based on avg satisfaction + rng

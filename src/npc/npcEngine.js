@@ -122,6 +122,46 @@ export function selectLetterWriters(npcs, turn) {
   return writers;
 }
 
+const LETTER_TEMPLATES = {
+  unhappy: {
+    healthcare:     ["В поликлинику запись на два месяца вперёд!", "Скорую приходится ждать по несколько часов."],
+    education:      ["Школы переполнены, уроки в три смены.", "Учителя уходят — платить нечем."],
+    safety:         ["По ночам страшно выйти из дома.", "Машины во дворе взламывают уже не в первый раз."],
+    ecology:        ["Воздух стал заметно хуже — дышать нечем.", "Речку снова загрязнили, запах невыносим."],
+    infrastructure: ["Дороги разбиты, пробки стоят каждый день.", "Горячей воды нет уже вторую неделю."],
+    culture:        ["Детям некуда пойти после школы.", "Последний кинотеатр закрылся, город пустеет."],
+    digital:        ["Интернет пропадает каждый вечер.", "Запись в МФЦ только по живой очереди."],
+    economy:        ["Работы нет, молодёжь уезжает в Москву.", "Цены в магазинах растут каждую неделю."],
+  },
+  happy: {
+    healthcare:     ["Наконец открыли новый корпус — очередей нет!", "Врачи стали приезжать быстро, спасибо."],
+    education:      ["Дочка в восторге от новой школы!", "Олимпиада, призовые места — гордость города."],
+    safety:         ["Вечером снова спокойно гулять по улицам.", "Камеры помогли — вора нашли за час."],
+    ecology:        ["На набережной наконец-то дышится свободно!", "Парк преобразился, приходим каждые выходные."],
+    infrastructure: ["Дорогу починили — теперь не трясёт.", "Горячую воду дали даже раньше обещанного срока."],
+    culture:        ["Фестиваль — лучшее лето в моей жизни!", "Арт-центр стал нашим любимым местом в городе."],
+    digital:        ["Провели оптоволокно — скорость как в Москве!", "Электронная запись к врачу — очень удобно."],
+    economy:        ["Открылся коворкинг, нашёл хорошую работу!", "Рынок выходного дня — отличная идея мэра."],
+  },
+};
+
+export function generateLetterText(npc, metrics) {
+  const unhappy = npc.satisfaction < 40;
+  const happy = npc.satisfaction > 65;
+  if (!unhappy && !happy) return null;
+
+  const sentiment = unhappy ? "unhappy" : "happy";
+  const pool = unhappy ? LETTER_TEMPLATES.unhappy : LETTER_TEMPLATES.happy;
+
+  const targetNeed = unhappy
+    ? npc.needs.reduce((w, n) => (metrics[n] || 0) < (metrics[w] || 0) ? n : w, npc.needs[0])
+    : npc.needs.reduce((b, n) => (metrics[n] || 0) > (metrics[b] || 0) ? n : b, npc.needs[0]);
+
+  const templates = pool[targetNeed] || (unhappy ? ["Недоволен работой мэрии."] : ["Спасибо за работу!"]);
+  const text = templates[Math.floor(Math.abs(npc.satisfaction * 17 + npc.needs.length * 7)) % templates.length];
+  return { text, sentiment };
+}
+
 export function addNPCMemory(npc, turn, event, sentiment) {
   const memory = [...npc.memory, { turn, event, sentiment }];
   // Keep last 10 memories

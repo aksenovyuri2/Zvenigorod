@@ -25,8 +25,9 @@ import {
 import { checkCrisisTrigger, startCrisis, getCurrentCrisisPhase, advanceCrisis } from "./crises.js";
 import { generateNPCs } from "../npc/npcGenerator.js";
 import { processNPCTurn, selectLetterWriters } from "../npc/npcEngine.js";
-import { generateDeputies } from "../political/dumaEngine.js";
-import { initNeighborRelations, checkHostileActions, advanceJointProject, resetTurnFlags } from "../political/diplomacy.js";
+import { generateDeputies, checkImpeachment, checkRecallVote, executeRecallVote } from "../political/dumaEngine.js";
+import { checkProtests, processProtests } from "./protestEngine.js";
+import { initNeighborRelations, checkHostileActions, advanceJointProject, resetTurnFlags, applyDiplomaticAction } from "../political/diplomacy.js";
 
 // ── Internal helpers ──
 
@@ -175,7 +176,7 @@ export function createInitialState(seed, scenarioId = "standard", difficultyId =
     phase: "start", turn: 0, budget, debt, population: INIT_POP,
     metrics, prevMetrics: { ...metrics }, prevPopulation: INIT_POP, prevBudget: budget, prevSatisfactions: { ...satisfactions },
     selectedDecisions: [], availableDecisions: decisions, usedOnceDecisions: [], decisionHistory: {},
-    recurringEffects: { budget: 0 }, currentEvent: null, eventQueue: [], usedEventIds: [], lastTurnDecisionIds: [],
+    recurringEffects: { budget: 0 }, recurringIncomes: [], currentEvent: null, eventQueue: [], usedEventIds: [], lastTurnDecisionIds: [],
     history: [{ turn: 0, metrics: { ...metrics }, population: INIT_POP, budget, globalRankIdx, satisfaction: { ...satisfactions }, approval, zvScore }],
     globalRankIdx, zvenigorodScore: zvScore, turnRevenue: 0, turnExpenses: 0,
     seed: rng.getSeed(), costMultiplier: 1, costMultiplierTurns: 0,
@@ -193,6 +194,8 @@ export function createInitialState(seed, scenarioId = "standard", difficultyId =
     economy,
     // v3 Projects
     projects: [], projectProblems: [], pendingContractorChoice: null,
+    // v3 Protests & Exile
+    activeProtests: [], approvalHistory: [], exiled: false, resolvedProtests: 0,
     // v3 Crises
     activeCrisis: null, resolvedCrises: [], crisisActionChosen: false,
     // v3 Diplomacy
@@ -214,6 +217,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   let eventBudget = 0, eventPopulation = 0;
   let newEventQueue = [...(state.eventQueue || [])].filter(q => q.targetTurn !== state.turn + 1);
   let newRecurring = { ...state.recurringEffects };
+  let newRecurringIncomes = [...(state.recurringIncomes || [])];
   let newCostMultiplier = state.costMultiplier || 1;
   let newCostMultiplierTurns = state.costMultiplierTurns || 0;
   let newUsedEventIds = [...(state.usedEventIds || [])];
@@ -276,7 +280,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
       budget -= Math.round(dec.cost * (newCostMultiplier || 1));
     }
 
-    if (dec.recurring) newRecurring = { ...newRecurring, budget: (newRecurring.budget || 0) + dec.recurring };
+    if (dec.recurringIncome) newRecurringIncomes = [...newRecurringIncomes, { ...dec.recurringIncome, startTurn: state.turn + 1, decisionId: dec.id }];
     if (dec.once) newUsedOnce.push(id);
     if (dec.populationEffect) population += dec.populationEffect;
     newDecisionHistory[id] = timesUsed + 1;
@@ -290,7 +294,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   for (const proj of newProjects) {
     if (proj.status === "building" && proj.currentTurn > 0) {
       const { project: advanced, problem } = advanceProject(proj, rng);
-      advancedProjects.push(advanced);
+      advancedProjects.push({ ...advanced, currentProblem: problem || null });
       if (problem) newProjectProblems.push({ projectName: proj.name, ...problem });
       if (advanced.status === "building") budget -= advanced.costPerTurn;
     } else {
@@ -351,23 +355,62 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
     if (action.approvalDelta) approvalDelta += action.approvalDelta;
   }
 
+  // ── 6.5. Protests ──
+  let newActiveProtests = [...(state.activeProtests || [])];
+  const newProtests = checkProtests({ ...state, metrics, turn: state.turn + 1 });
+  newActiveProtests = [...newActiveProtests, ...newProtests];
+  const protestResult = processProtests(newActiveProtests, metrics, state.turn + 1);
+  newActiveProtests = protestResult.activeProtests;
+  for (const [k, v] of Object.entries(protestResult.metricChanges)) {
+    metrics[k] = Math.max(0, (metrics[k] || 0) + v);
+  }
+  approvalDelta += protestResult.approvalDelta;
+  const resolvedCount = (state.activeProtests || []).length - newActiveProtests.length;
+  const newResolvedProtests = (state.resolvedProtests || 0) + Math.max(0, resolvedCount);
+  const protestNews = newProtests.map(p => `⚠️ ${p.name}!`);
+
+  // ── 6.6. Recall & Impeachment ──
+  let exiled = false;
+  const approvalHistory = [...(state.approvalHistory || []), state.approval];
+  if (checkRecallVote(approvalHistory)) {
+    const recallResult = executeRecallVote(state.approval + approvalDelta, calcGroupSatisfactions(metrics), state.deputies);
+    if (recallResult) exiled = true;
+  }
+  if (!exiled && checkImpeachment(state.deputies, state.approval + approvalDelta)) {
+    exiled = true;
+  }
+
   // ── 7. Recurring ──
-  budget += newRecurring.budget || 0;
+  let recurringTotal = 0;
+  for (const ri of newRecurringIncomes) {
+    const turnsActive = (state.turn + 1) - ri.startTurn;
+    const currentYield = Math.max(0, ri.base - ri.decayPerTurn * turnsActive);
+    recurringTotal += currentYield - ri.maintenance;
+  }
+  budget += recurringTotal + (newRecurring.budget || 0);
 
   // ── 8. Mandatory & revenue ──
-  const mandatory = calcMandatoryExpenses(population);
+  const mandatory = calcMandatoryExpenses(population, metrics);
   budget -= mandatory;
   const taxMult = getTaxRevenueMultiplier((state.economy || {}).taxRate || 10);
-  const revenue = calcRevenue(population, metrics, taxMult);
+  const revenueMult = (state.difficulty || {}).revenueMult || 1;
+  const revenue = calcRevenue(population, metrics, taxMult * revenueMult);
   budget += revenue;
 
-  // ── 9. Debt ──
+  // ── 9. Progressive debt ──
   if (budget < 0) { newDebt += Math.abs(budget); budget = 0; }
-  newDebt = Math.round(newDebt * 1.05);
-  if (newDebt > 0 && budget > 0) { const pay = Math.min(budget, newDebt); budget -= pay; newDebt -= pay; }
+  const interestRate = newDebt < 100 ? 0.03 : newDebt < 300 ? 0.06 : newDebt < 500 ? 0.10 : 0.15;
+  newDebt = Math.round(newDebt * (1 + interestRate));
   let defaulted = false;
-  if (newDebt > 500) for (const k of METRIC_KEYS) metrics[k] -= 2;
-  if (newDebt > 1000) defaulted = true;
+  if (newDebt > 100) approvalDelta -= 2;
+  if (newDebt > 200) { for (const k of METRIC_KEYS) metrics[k] -= 1; }
+  if (newDebt > 300) { for (const k of METRIC_KEYS) metrics[k] -= 2; approvalDelta -= 3; }
+  if (newDebt > 500) { for (const k of METRIC_KEYS) metrics[k] -= 3; approvalDelta -= 5; }
+  if (newDebt > 700) defaulted = true;
+  if (newDebt > 0 && budget > 0) {
+    const minPay = Math.min(budget, Math.max(20, Math.round(newDebt * 0.1)));
+    budget -= minPay; newDebt -= minPay;
+  }
 
   // ── 10. Clamp ──
   metrics = clampMetrics(metrics);
@@ -438,6 +481,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   for (const a of arrived) news.push(`${a.shortName || a.name} \u043F\u0435\u0440\u0435\u0435\u0445\u0430\u043B(\u0430) \u0432 \u0417\u0432\u0435\u043D\u0438\u0433\u043E\u0440\u043E\u0434!`);
   for (const cp of newCompletedJointProjects) news.push(`\u0421\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u044B\u0439 \u043F\u0440\u043E\u0435\u043A\u0442 \u{00AB}${cp.name}\u{00BB} \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D!`);
   for (const pp of newProjectProblems) news.push(`\u26A0\uFE0F \u041F\u0440\u043E\u0431\u043B\u0435\u043C\u0430 \u043D\u0430 \u0441\u0442\u0440\u043E\u0439\u043A\u0435 \u{00AB}${pp.projectName}\u{00BB}: ${pp.desc || pp.label}`);
+  for (const pn of protestNews) news.push(pn);
 
   // ── 19. Next turn prep ──
   const nextTurn = state.turn + 1;
@@ -453,7 +497,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   const snapshot = { turn: nextTurn, metrics: { ...metrics }, population, budget, globalRankIdx, satisfaction: { ...satisfactions }, approval: newApproval, zvScore };
 
   let phase;
-  if (defaulted) phase = "end";
+  if (defaulted || exiled) phase = "end";
   else if (nextTurn >= MAX_TURNS) phase = "end";
   else phase = "results";
 
@@ -461,7 +505,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
     phase, turn: nextTurn, budget: Math.round(budget), debt: Math.round(newDebt), population, metrics,
     prevMetrics, prevPopulation: prevPop, prevBudget, prevSatisfactions,
     selectedDecisions: [], availableDecisions: nextDecisions, usedOnceDecisions: newUsedOnce,
-    decisionHistory: newDecisionHistory, recurringEffects: newRecurring,
+    decisionHistory: newDecisionHistory, recurringEffects: { budget: recurringTotal }, recurringIncomes: newRecurringIncomes,
     currentEvent: nextEvent, eventQueue: newEventQueue, history: [...state.history, snapshot],
     globalRankIdx, zvenigorodScore: zvScore,
     turnRevenue: revenue,
@@ -482,6 +526,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
     economy: newEconomy, projects: newProjects, projectProblems: newProjectProblems, pendingContractorChoice: null,
     activeCrisis: newActiveCrisis, resolvedCrises: newResolvedCrises, crisisActionChosen: false,
     neighborRelations: newNeighborRelations, diplomaticResults: [], completedJointProjects: newCompletedJointProjects,
+    activeProtests: newActiveProtests, approvalHistory, exiled, resolvedProtests: newResolvedProtests,
   };
 }
 
@@ -512,7 +557,7 @@ export function gameReducer(state, action) {
     case "SUBMIT_WITH_EVENT":
       return processTurn(state, state.selectedDecisions, state.eventChoiceIndex ?? null);
     case "NEXT_TURN": {
-      if (state.turn >= MAX_TURNS || state.defaulted) return { ...state, phase: "end" };
+      if (state.turn >= MAX_TURNS || state.defaulted || state.exiled) return { ...state, phase: "end" };
       if (state.turn === ELECTION_TURN) return { ...state, phase: "election_campaign" };
       if (state.activeCrisis && !state.crisisActionChosen) return { ...state, phase: "crisis" };
       if (state.currentEvent) return { ...state, phase: "event" };
@@ -551,7 +596,8 @@ export function gameReducer(state, action) {
       const winProb = state.approval * 0.40 + attrGrowth * 0.25 + popGrowth * 0.15 + noBankBonus * 0.10 + randomF * 0.10;
       const won = winProb >= 50;
       const votePercent = Math.max(30, Math.min(70, 50 + (winProb - 50) * 0.4));
-      return { ...state, phase: "election_result", electionResult: { won, votePercent: Math.round(votePercent * 10) / 10, opponent }, seed: rng.getSeed() };
+      const resultPhase = won ? "election_result" : "election_loss";
+      return { ...state, phase: resultPhase, electionResult: { won, votePercent: Math.round(votePercent * 10) / 10, opponent }, seed: rng.getSeed() };
     }
     case "CHOOSE_PROMISE": {
       const promise = ELECTION_PROMISES[action.index];
@@ -570,6 +616,22 @@ export function gameReducer(state, action) {
       return { ...state, onboardingStep: 0 };
     case "NEXT_ONBOARDING":
       return { ...state, onboardingStep: state.onboardingStep >= 4 ? 0 : state.onboardingStep + 1 };
+    case "APPLY_DIPLOMATIC_ACTION": {
+      const { neighborId, actionId } = action;
+      const rng = createRNG(state.seed);
+      const { relations, effects, cost } = applyDiplomaticAction(
+        state.neighborRelations, neighborId, actionId, rng, state.metrics
+      );
+      const newMetrics = { ...state.metrics };
+      for (const [k, v] of Object.entries(effects || {})) {
+        newMetrics[k] = Math.max(0, Math.min(100, (newMetrics[k] || 0) + v));
+      }
+      return { ...state, neighborRelations: relations, budget: state.budget - (cost || 0), metrics: newMetrics, seed: rng.getSeed() };
+    }
+    case "ELECTION_LOSS_END":
+      return { ...state, phase: "end" };
+    case "RESTART_FRESH":
+      return { ...createInitialState(Date.now()), phase: "start" };
     case "RESTART":
       return { ...createInitialState(Date.now(), state.scenarioId, state.difficultyId), phase: "start" };
     default:

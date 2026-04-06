@@ -145,6 +145,10 @@ export const ACHIEVEMENTS = [
   { id:"survivor", name:"Выживший", cond:(s)=>s.negativeStreakMax>=3, icon:"🔥" },
   { id:"overtake_spb", name:"Лучше Петербурга", cond:(s)=>s.zvenigorodScore>71, icon:"🇷🇺" },
   { id:"world_best", name:"Лучший на планете", cond:(s)=>s.globalRankIdx===0, icon:"🌍" },
+  { id:"pacifier", name:"Усмиритель", cond:(s)=>(s.resolvedProtests||0)>=3, icon:"✊" },
+  { id:"financier", name:"Финансист", cond:(s)=>s.debt===0&&s.turn>=20, icon:"🏦" },
+  { id:"balance_master", name:"Баланс мастер", cond:(s)=>METRIC_KEYS.every(k=>s.metrics[k]>=40&&s.metrics[k]<=70), icon:"🎯" },
+  { id:"comeback", name:"Камбэк", cond:(s)=>s.approval>=60&&(s.approvalHistory||[]).some(a=>a<20), icon:"🔄" },
 ];
 
 export const ELECTION_PROMISES = [

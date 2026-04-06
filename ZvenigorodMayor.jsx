@@ -23,6 +23,8 @@ import {
 } from "./src/engine/gameLoop.js";
 import { calcRevenue, calcMandatoryExpenses } from "./src/engine/calculator.js";
 import { getCurrentCrisisPhase } from "./src/engine/crises.js";
+import { generateLetterText } from "./src/npc/npcEngine.js";
+import { NEIGHBORS, DIPLOMATIC_ACTIONS } from "./src/political/diplomacy.js";
 
 // Icon mapping: string keys from engine to React components
 const ICON_MAP = {
@@ -146,19 +148,19 @@ function DecisionCard({ decision, selected, affordable, onToggle, usageCount, co
   const hasNeg = Object.values(decision.effects).some(v => v < 0);
   return (
     <button onClick={() => !disabled && onToggle(decision.id)} disabled={disabled}
-      className={`w-full text-left rounded-xl p-4 border-2 transition-all duration-300
-        ${selected ? "border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10"
+      className={`w-full text-left rounded-xl p-3 border-2 transition-all duration-300
+        ${selected ? "border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10 scale-[1.02]"
         : disabled ? "border-slate-700/50 bg-slate-800/30 opacity-50 cursor-not-allowed"
-        : hasNeg ? "border-amber-700/40 bg-slate-800/60 hover:border-amber-500/60 cursor-pointer"
-        : "border-slate-700/40 bg-slate-800/60 hover:border-slate-500/60 cursor-pointer"}`}>
-      <div className="flex items-start justify-between mb-2">
-        <h3 className="text-sm font-bold text-white leading-tight pr-2">{decision.name}</h3>
+        : hasNeg ? "border-amber-700/40 bg-slate-800/60 hover:border-amber-500/60 hover:scale-[1.01] cursor-pointer"
+        : "border-slate-700/40 bg-slate-800/60 hover:border-slate-500/60 hover:scale-[1.01] cursor-pointer"}`}>
+      <div className="flex items-start justify-between mb-1">
+        <h3 className="text-xs font-bold text-white leading-tight pr-2">{decision.name}</h3>
         <div className="flex items-center gap-1 shrink-0"><Coins size={14} className="text-yellow-500" /><span className="text-sm font-bold text-yellow-500">{cost}</span></div>
       </div>
-      <p className="text-xs text-slate-400 mb-3 leading-relaxed">{decision.desc}</p>
+      <p className="text-xs text-slate-400 mb-1.5 leading-snug line-clamp-1">{decision.desc}</p>
       <div className="flex flex-wrap gap-1.5">
         {Object.entries(decision.effects).map(([k, v]) => <EffectBadge key={k} metricKey={k} value={usageCount > 0 ? Math.round(v * Math.pow(0.7, usageCount)) : v} />)}
-        {decision.recurring && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-500/15 text-purple-300">{decision.recurring > 0 ? "+" : ""}{decision.recurring}/ход</span>}
+        {decision.recurringIncome && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-500/15 text-purple-300">{decision.recurringIncome.base > 0 ? `+${decision.recurringIncome.base - decision.recurringIncome.maintenance}` : `-${decision.recurringIncome.maintenance}`}/ход</span>}
         {decision.populationEffect && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-cyan-500/15 text-cyan-300"><Users size={12} />+{decision.populationEffect}</span>}
         {decision.once && <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-600/30 text-slate-400">Разовое</span>}
         {decision.requires && <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-600/20 text-blue-300">Цепочка</span>}
@@ -444,9 +446,10 @@ function DecisionPhase({ state, dispatch }) {
   const { turn, budget, debt, population, metrics, prevMetrics, selectedDecisions, availableDecisions, globalRankIdx, satisfactions, prevSatisfactions, recurringEffects, costMultiplier, costMultiplierTurns, approval, zvenigorodScore, advisorComments } = state;
   const totalCost = selectedDecisions.reduce((s, id) => { const d = ALL_DECISIONS.find(x => x.id === id); return s + (d ? Math.round(d.cost * (costMultiplier || 1)) : 0); }, 0);
   const revenue = calcRevenue(population, metrics);
-  const mandatory = calcMandatoryExpenses(population);
-  const [showGroups, setShowGroups] = useState(true);
+  const mandatory = calcMandatoryExpenses(population, metrics);
+  const [showGroups, setShowGroups] = useState(false);
   const [showRankFull, setShowRankFull] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState("groups");
   const avgSat = calcAvgSatisfaction(satisfactions);
   const season = turn % 4;
   const SeasonIcon = SEASON_ICONS[season];
@@ -457,11 +460,11 @@ function DecisionPhase({ state, dispatch }) {
   const metricHistory = (mk) => state.history.map(h => h.metrics[mk]);
 
   return (
-    <div className="min-h-screen px-3 md:px-6 py-4 md:py-6 pb-16">
-      <FadeIn>
+    <div className="h-screen flex flex-col overflow-hidden">
+      <FadeIn className="flex flex-col overflow-hidden h-full">
         {/* Header */}
-        <div className="mb-4 md:mb-6">
-          <div className="flex items-center justify-between mb-2">
+        <div className="px-4 pt-2 pb-1 shrink-0">
+          <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-3">
               <h1 className="text-lg md:text-xl font-black text-white">Q{quarter} {year}</h1>
               <span className="text-xs text-slate-500">Срок {term}, ход {termTurn}/{ELECTION_TURN}</span>
@@ -478,80 +481,243 @@ function DecisionPhase({ state, dispatch }) {
               </div>
             </div>
           </div>
-          <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
+          <div className="w-full h-0.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
             <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${(turn / MAX_TURNS) * 100}%` }} />
           </div>
         </div>
 
-        {costMultiplierTurns > 0 && <div className="mb-4 px-4 py-2 rounded-lg bg-amber-900/30 border border-amber-700/40 text-amber-300 text-xs">Цены на строительство +20% (осталось: {costMultiplierTurns})</div>}
-        {debt > 0 && <div className={`mb-4 px-4 py-2 rounded-lg border text-xs ${debt > 500 ? "bg-red-900/30 border-red-700/40 text-red-300" : "bg-yellow-900/30 border-yellow-700/40 text-yellow-300"}`}>Долг: {Math.round(debt)} млн {debt > 500 && "(Штраф: -2 ко всем метрикам!)"}</div>}
-        {METRIC_KEYS.some(k => metrics[k] < 20) && <div className="mb-4 px-4 py-2 rounded-lg bg-red-900/30 border border-red-700/40 text-red-300 text-xs flex items-center gap-2"><AlertTriangle size={14} />Критическая ситуация: {METRIC_KEYS.filter(k=>metrics[k]<20).map(k=>METRICS_CFG[k].name).join(", ")} на критическом уровне!</div>}
+        {/* Stats Bar */}
+        <div className="flex items-center gap-3 px-4 py-1.5 mx-4 rounded-lg bg-slate-800/50 border border-slate-700/30 text-xs shrink-0">
+          <div className="flex items-center gap-1">
+            <Coins size={13} className="text-yellow-500" />
+            <span className="font-bold text-white">{Math.round(budget)}</span>
+            <span className="text-slate-500">млн</span>
+          </div>
+          <span className="text-slate-600">|</span>
+          <span className="text-emerald-400">+{revenue}</span>
+          <span className="text-red-400">-{mandatory}</span>
+          {totalCost > 0 && <span className="text-amber-400">-{totalCost}</span>}
+          {(recurringEffects.budget||0) !== 0 && <span className={recurringEffects.budget > 0 ? "text-emerald-400" : "text-red-400"}>{recurringEffects.budget > 0 ? "+" : ""}{recurringEffects.budget}/ход</span>}
+          {debt > 0 && <span className="text-red-400 font-bold">Долг: {Math.round(debt)}</span>}
+          <div className="flex-1" />
+          <div className="flex items-center gap-1">
+            <Users size={13} className="text-cyan-400" />
+            <span className="text-white">{population.toLocaleString("ru-RU")}</span>
+          </div>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
-          {/* Left */}
-          <div className="lg:col-span-5 xl:col-span-4 space-y-4">
-            <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-4">
-              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Бюджет</h2>
-              <div className="text-2xl font-black text-white mb-2">{Math.round(budget)} <span className="text-sm font-normal text-slate-400">млн</span></div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="text-slate-400">Доход/кв.:</div><div className="text-emerald-400 font-medium text-right">+{revenue}</div>
-                <div className="text-slate-400">Обяз. расходы:</div><div className="text-red-400 font-medium text-right">-{mandatory}</div>
-                {(recurringEffects.budget||0) !== 0 && <><div className="text-slate-400">Рекуррентные:</div><div className={`font-medium text-right ${recurringEffects.budget > 0 ? "text-emerald-400" : "text-red-400"}`}>{recurringEffects.budget > 0 ? "+" : ""}{recurringEffects.budget}</div></>}
-                <div className="text-slate-400">Выбрано:</div><div className="text-yellow-400 font-medium text-right">-{totalCost}</div>
+        {costMultiplierTurns > 0 && <div className="mx-4 mt-1 px-4 py-1 rounded-lg bg-amber-900/30 border border-amber-700/40 text-amber-300 text-xs shrink-0">Цены на строительство +20% (осталось: {costMultiplierTurns})</div>}
+        {debt > 500 && <div className="mx-4 mt-1 px-4 py-1 rounded-lg border text-xs bg-red-900/30 border-red-700/40 text-red-300 shrink-0">Долг: {Math.round(debt)} млн (Штраф: -2 ко всем метрикам!)</div>}
+        {METRIC_KEYS.some(k => metrics[k] < 20) && <div className="mx-4 mt-1 px-4 py-1 rounded-lg bg-red-900/30 border border-red-700/40 text-red-300 text-xs flex items-center gap-2 shrink-0"><AlertTriangle size={14} />Критическая ситуация: {METRIC_KEYS.filter(k=>metrics[k]<20).map(k=>METRICS_CFG[k].name).join(", ")}</div>}
+
+        {/* Main content */}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 px-4 pb-2 overflow-hidden">
+          {/* Sidebar */}
+          <div className="lg:col-span-4 overflow-y-auto pr-1 space-y-3">
+            <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-3">
+              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Метрики города</h2>
+              <div className="space-y-1">
+                {METRIC_KEYS.map(mk => {
+                  const cfg = METRICS_CFG[mk];
+                  const v = Math.round(metrics[mk]);
+                  const pv = Math.round(prevMetrics[mk]);
+                  const delta = v - pv;
+                  const critical = v < 20;
+                  const Icon = cfg.Icon;
+                  return (
+                    <div key={mk} className="flex items-center gap-1.5 h-5" title={`${cfg.name}: ${v}`}>
+                      <Icon size={13} style={{ color: critical ? "#ef4444" : cfg.color }} />
+                      <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-white/5">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, v))}%`, backgroundColor: critical ? "#ef4444" : cfg.color }} />
+                      </div>
+                      <span className={`text-xs font-mono w-5 text-right ${critical ? "text-red-400 font-bold" : "text-slate-300"}`}>{v}</span>
+                      {delta !== 0 && <span className={`text-xs w-5 text-right ${delta > 0 ? "text-emerald-400" : "text-red-400"}`}>{delta > 0 ? "+" : ""}{delta}</span>}
+                      {critical && <span className="text-red-400 text-xs">!</span>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2"><Users size={16} className="text-cyan-400" /><span className="text-xs font-bold text-slate-400 uppercase">Население</span></div>
-                <span className="text-lg font-black text-white">{population.toLocaleString("ru-RU")}</span>
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-4">
-              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Метрики города</h2>
-              {METRIC_KEYS.map(k => (
-                <div key={k} className="flex items-center gap-2">
-                  <div className="flex-1"><MetricBar metricKey={k} value={metrics[k]} prevValue={prevMetrics[k]} compact /></div>
-                  <Sparkline data={metricHistory(k)} color={METRICS_CFG[k].color} width={50} height={16} />
+            {/* NPC Letters */}
+            {(state.npcLetters || []).length > 0 && (
+              <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-3">
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Почта мэра</h2>
+                <div className="space-y-2">
+                  {state.npcLetters.map((npc, i) => {
+                    const letter = generateLetterText(npc, metrics);
+                    if (!letter) return null;
+                    const happy = letter.sentiment === "happy";
+                    return (
+                      <div key={i} className={`rounded-lg p-2 text-xs ${happy ? "bg-emerald-900/20 border border-emerald-800/30" : "bg-red-900/20 border border-red-800/30"}`}>
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span>{happy ? "😊" : "😠"}</span>
+                          <span className="font-semibold text-slate-200 truncate flex-1">{npc.name}</span>
+                          <span className="text-slate-500 text-[10px] shrink-0">{npc.group}</span>
+                        </div>
+                        <p className={`italic leading-tight ${happy ? "text-emerald-300" : "text-red-300"}`}>«{letter.text}»</p>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
 
-            <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-4">
-              <button onClick={() => setShowGroups(!showGroups)} className="flex items-center justify-between w-full mb-2">
-                <h2 className="text-xs font-bold text-slate-400 uppercase">Удовлетворённость ({Math.round(avgSat)}%)</h2>
-                {showGroups ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
-              </button>
-              {showGroups && GROUP_KEYS.map(k => <GroupSatisfaction key={k} groupKey={k} value={satisfactions[k]} prevValue={(prevSatisfactions||{})[k]||satisfactions[k]} />)}
-            </div>
+            {/* Active projects */}
+            {(state.projects || []).filter(p => p.status === "building").length > 0 && (
+              <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-3">
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Стройки города</h2>
+                <div className="space-y-2">
+                  {state.projects.filter(p => p.status === "building").map((p, i) => {
+                    const progress = Math.round((p.currentTurn / p.totalTurns) * 100);
+                    return (
+                      <div key={i} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-200 truncate flex-1">{p.name}</span>
+                          <span className="text-slate-400 ml-2 shrink-0 font-mono">{p.currentTurn}/{p.totalTurns}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                          <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+                        </div>
+                        {p.currentProblem && (
+                          <div className="text-[10px] text-amber-400 truncate">⚠️ {p.currentProblem.label || p.currentProblem.desc}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-            <RankingTable zvScore={zvenigorodScore} rankIdx={globalRankIdx} expanded={showRankFull} onToggle={() => setShowRankFull(!showRankFull)} />
+            {/* Protests */}
+            {(state.activeProtests || []).length > 0 && (
+              <div className="rounded-xl bg-red-900/20 border border-red-800/40 p-3">
+                <h2 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-2">Протесты</h2>
+                <div className="space-y-1.5">
+                  {state.activeProtests.map((p, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span>{p.icon}</span>
+                      <span className="text-red-300 flex-1 truncate">{p.name}</span>
+                      <span className="text-red-400/70 font-mono">{state.turn + 1 - p.startTurn} ход.</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tabs: Группы / Рейтинг / Соседи */}
+            <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-3">
+              <div className="flex gap-1 mb-3">
+                {[["groups","Группы"],["rank","Рейтинг"],["diplomacy","Соседи"]].map(([tab, label]) => (
+                  <button key={tab} onClick={() => setSidebarTab(tab)}
+                    className={`flex-1 py-1 text-[11px] font-semibold rounded-lg transition-colors ${sidebarTab === tab ? "bg-blue-600 text-white" : "bg-slate-700/60 text-slate-400 hover:text-slate-200"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {sidebarTab === "groups" && (
+                <div className="space-y-1">
+                  {GROUP_KEYS.map(k => <GroupSatisfaction key={k} groupKey={k} value={satisfactions[k]} prevValue={(prevSatisfactions||{})[k]||satisfactions[k]} />)}
+                </div>
+              )}
+
+              {sidebarTab === "rank" && (
+                <RankingTable zvScore={zvenigorodScore} rankIdx={globalRankIdx} expanded={showRankFull} onToggle={() => setShowRankFull(!showRankFull)} />
+              )}
+
+              {sidebarTab === "diplomacy" && (
+                <div className="space-y-2">
+                  {NEIGHBORS.map(n => {
+                    const rel = (state.neighborRelations || {})[n.id] || { relationship: 0, actionThisTurn: false };
+                    const rv = rel.relationship;
+                    const relColor = rv > 30 ? "text-emerald-400" : rv < -30 ? "text-red-400" : "text-yellow-400";
+                    const barWidth = Math.max(0, Math.min(100, (rv + 100) / 2));
+                    const barColor = rv > 0 ? "#10b981" : "#ef4444";
+                    const availableActions = DIPLOMATIC_ACTIONS.filter(a => !a.allNeighbors && a.id !== "compete");
+                    return (
+                      <div key={n.id} className="rounded-lg bg-slate-900/50 p-2 text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-slate-200 font-semibold">{n.icon} {n.name}</span>
+                          <span className={`font-mono font-bold ${relColor}`}>{rv > 0 ? "+" : ""}{rv}</span>
+                        </div>
+                        <div className="h-1 rounded-full bg-white/5 overflow-hidden mb-2">
+                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${barWidth}%`, backgroundColor: barColor }} />
+                        </div>
+                        {rel.actionThisTurn ? (
+                          <span className="text-slate-500 text-[10px]">Уже действовали этот ход</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {availableActions.map(a => (
+                              <button key={a.id}
+                                onClick={() => dispatch({ type: "APPLY_DIPLOMATIC_ACTION", neighborId: n.id, actionId: a.id })}
+                                disabled={budget < (a.baseCost || 0)}
+                                className="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-300 rounded text-[10px] transition-colors"
+                                title={`${a.name}${a.baseCost ? ` (−${a.baseCost} млн)` : " (бесплатно)"}`}>
+                                {a.name.split(" ").slice(0, 2).join(" ")}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Right */}
-          <div className="lg:col-span-7 xl:col-span-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-slate-300">Решения <span className="text-slate-500">({selectedDecisions.length} из {MAX_PICKS})</span></h2>
+          {/* Decisions */}
+          <div className="lg:col-span-8 flex flex-col overflow-hidden">
+            <h2 className="text-sm font-bold text-slate-300 mb-2 shrink-0">Решения ({selectedDecisions.length} из {MAX_PICKS})</h2>
+            <div className="flex-1 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {availableDecisions.map(d => {
+                  const cost = Math.round(d.cost * (costMultiplier||1));
+                  const selected = selectedDecisions.includes(d.id);
+                  const otherCost = totalCost - (selected ? cost : 0);
+                  const affordable = (budget - otherCost - cost) >= -50;
+                  return <DecisionCard key={d.id} decision={d} selected={selected} affordable={affordable||selected} onToggle={id => dispatch({ type: "SELECT_DECISION", id })} usageCount={state.decisionHistory[d.id]||0} costMultiplier={costMultiplier||1} advisorComment={(advisorComments||{})[d.id]} />;
+                })}
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-              {availableDecisions.map(d => {
-                const cost = Math.round(d.cost * (costMultiplier||1));
-                const selected = selectedDecisions.includes(d.id);
-                const otherCost = totalCost - (selected ? cost : 0);
-                const affordable = (budget - otherCost - cost) >= -50;
-                return <DecisionCard key={d.id} decision={d} selected={selected} affordable={affordable||selected} onToggle={id => dispatch({ type: "SELECT_DECISION", id })} usageCount={state.decisionHistory[d.id]||0} costMultiplier={costMultiplier||1} advisorComment={(advisorComments||{})[d.id]} />;
-              })}
+            <div className="pt-2 shrink-0">
+              <button onClick={() => { if (state.eventChoiceIndex != null) dispatch({ type: "SUBMIT_WITH_EVENT" }); else dispatch({ type: "SUBMIT_DECISIONS" }); }}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all text-base">
+                {selectedDecisions.length === 0 ? "Пропустить ход" : "Завершить ход"}{selectedDecisions.length > 0 && <span className="text-blue-200 ml-2">(-{totalCost} млн)</span>}
+              </button>
             </div>
-            <button onClick={() => { if (state.eventChoiceIndex != null) dispatch({ type: "SUBMIT_WITH_EVENT" }); else dispatch({ type: "SUBMIT_DECISIONS" }); }}
-              className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all text-lg">
-              {selectedDecisions.length === 0 ? "Пропустить ход" : "Завершить ход"}{selectedDecisions.length > 0 && <span className="text-blue-200 ml-2">(-{totalCost} млн)</span>}
-            </button>
           </div>
         </div>
       </FadeIn>
     </div>
   );
+}
+
+function generateNarrative(state) {
+  const { metrics, prevMetrics, budget, prevBudget, population, prevPopulation, approval, activeProtests } = state;
+  const prevApproval = state.history.length >= 2 ? state.history[state.history.length - 2].approval : approval;
+  const budgetDelta = budget - prevBudget;
+  const popDelta = population - prevPopulation;
+  const approvalDelta = approval - prevApproval;
+
+  const deltas = METRIC_KEYS.map(k => ({ key: k, name: METRICS_CFG[k].name, delta: Math.round(metrics[k] - prevMetrics[k]), val: Math.round(metrics[k]) }));
+  const worst = deltas.reduce((a, b) => b.delta < a.delta ? b : a);
+  const best = deltas.reduce((a, b) => b.delta > a.delta ? b : a);
+
+  const parts = [];
+  if (budgetDelta < -100) parts.push("Казна стремительно тает.");
+  else if (budgetDelta > 50) parts.push("Бюджет подрос — неплохо!");
+  if (worst.delta <= -5) parts.push(`${worst.name} просела на ${Math.abs(worst.delta)} — горожане недовольны.`);
+  if (best.delta >= 3) parts.push(`${best.name} улучшилась на +${best.delta}.`);
+  if ((activeProtests || []).length > 0) parts.push(`В городе ${activeProtests.length} акция(й) протеста.`);
+  if (approvalDelta <= -5) parts.push("Рейтинг мэра падает.");
+  else if (approvalDelta >= 5) parts.push("Горожане всё больше доверяют мэру.");
+  if (popDelta < -100) parts.push("Люди уезжают из города.");
+  if (state.debt > 300) parts.push("Долг растёт — нужны срочные меры.");
+
+  if (parts.length === 0) parts.push("Спокойный квартал без потрясений.");
+  return parts.slice(0, 2).join(" ");
 }
 
 function ResultsPhase({ state, dispatch }) {
@@ -568,6 +734,7 @@ function ResultsPhase({ state, dispatch }) {
           <div className="text-center mb-6">
             <h2 className="text-xl font-black text-white mb-1">Итоги Q{(turn - 1) % 4 + 1} {2025 + Math.floor((turn - 1) / 4)}</h2>
             <p className="text-sm text-slate-400">Квартал {turn} из {MAX_TURNS}</p>
+            <p className="text-sm text-slate-300 italic mt-2">{generateNarrative(state)}</p>
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-6">
@@ -729,6 +896,121 @@ function ElectionVote({ state, dispatch }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ELECTION LOSS SCREEN (Game Over)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function ElectionLossScreen({ state, dispatch }) {
+  const { electionResult, satisfactions, metrics } = state;
+  const { votePercent, opponent } = electionResult;
+  const opponentPct = Math.round((100 - votePercent) * 10) / 10;
+
+  // Bottom 3 group satisfactions
+  const sortedGroups = GROUP_KEYS
+    .map(k => ({ key: k, name: GROUPS[k].name, value: Math.round(satisfactions[k]) }))
+    .sort((a, b) => a.value - b.value)
+    .slice(0, 3);
+
+  // 3 metrics that dropped the most from initial values
+  const metricDrops = METRIC_KEYS
+    .map(k => ({ key: k, name: METRICS_CFG[k]?.name, delta: Math.round(metrics[k]) - INIT_METRICS[k] }))
+    .sort((a, b) => a.delta - b.delta)
+    .slice(0, 3)
+    .filter(m => m.delta < 0);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+      <FadeIn className="max-w-xl w-full">
+        <div className="rounded-2xl bg-gradient-to-b from-red-950/60 to-slate-950/90 border border-red-500/30 p-8 shadow-2xl">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-900/40 border border-red-500/30 mb-4">
+              <Skull size={32} className="text-red-400" />
+            </div>
+            <h2 className="text-3xl font-black text-red-400 tracking-tight">Поражение на выборах</h2>
+            <p className="text-slate-500 text-sm mt-2">Ваше правление окончено</p>
+          </div>
+
+          {/* Vote bar */}
+          <div className="mb-6">
+            <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+              <span>Вы: {votePercent}%</span>
+              <span>{opponent.name}: {opponentPct}%</span>
+            </div>
+            <div className="relative h-6 rounded-full overflow-hidden bg-slate-800 border border-slate-700/50">
+              <div className="absolute inset-y-0 left-0 rounded-l-full bg-red-600/70" style={{ width: `${votePercent}%` }} />
+              <div className="absolute inset-y-0 right-0 rounded-r-full bg-emerald-600/70" style={{ width: `${opponentPct}%` }} />
+            </div>
+          </div>
+
+          {/* Winner */}
+          <div className="rounded-xl bg-slate-900/60 border border-slate-700/30 p-4 mb-6 text-center">
+            <p className="text-slate-300 text-sm leading-relaxed">
+              Жители Звенигорода выбрали нового мэра — <span className="text-white font-bold">{opponent.name}</span>.
+            </p>
+            <p className="text-xs text-slate-500 italic mt-1.5">{"\u00AB"}{opponent.slogan}{"\u00BB"}</p>
+          </div>
+
+          {/* Worst groups */}
+          {sortedGroups.length > 0 && (
+            <div className="rounded-xl bg-red-950/30 border border-red-900/30 p-4 mb-4">
+              <h3 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <UserMinus size={14} />Что пошло не так:
+              </h3>
+              <div className="space-y-2">
+                {sortedGroups.map(g => (
+                  <div key={g.key} className="flex items-center justify-between">
+                    <span className="text-sm text-slate-400">{g.name}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div className="h-full rounded-full bg-red-500/70" style={{ width: `${g.value}%` }} />
+                      </div>
+                      <span className="text-xs font-mono text-red-400 w-8 text-right">{g.value}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Metrics that dropped most */}
+          {metricDrops.length > 0 && (
+            <div className="rounded-xl bg-slate-900/40 border border-slate-700/30 p-4 mb-8">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <TrendingUp size={14} className="rotate-180" />Наибольшие потери:
+              </h3>
+              <div className="space-y-1.5">
+                {metricDrops.map(m => (
+                  <div key={m.key} className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">{m.name}</span>
+                    <span className="font-mono text-red-400">{m.delta}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => dispatch({ type: "RESTART" })}
+              className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-lg flex items-center justify-center gap-2 transition-colors"
+            >
+              <RotateCcw size={20} />Играть снова
+            </button>
+            <button
+              onClick={() => dispatch({ type: "RESTART_FRESH" })}
+              className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl text-sm border border-slate-700/50 flex items-center justify-center gap-2 transition-colors"
+            >
+              <Zap size={16} />Другой сценарий
+            </button>
+          </div>
+        </div>
+      </FadeIn>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // END SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -836,6 +1118,7 @@ export default function ZvenigorodMayorSim() {
       {state.phase === "election_campaign" && <ElectionCampaign state={state} dispatch={dispatch} />}
       {state.phase === "election_vote" && <ElectionVote state={state} dispatch={dispatch} />}
       {state.phase === "election_result" && <ElectionVote state={state} dispatch={dispatch} />}
+      {state.phase === "election_loss" && <ElectionLossScreen state={state} dispatch={dispatch} />}
       {state.phase === "end" && <EndScreen state={state} onRestart={() => dispatch({ type: "RESTART" })} />}
     </div>
   );

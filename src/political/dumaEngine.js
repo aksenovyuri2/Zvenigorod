@@ -164,3 +164,16 @@ export function checkImpeachment(deputies, approval) {
   const against = deputies.filter(d => d.loyalty < 30).length;
   return against >= 5;
 }
+
+export function checkRecallVote(approvalHistory) {
+  if (!approvalHistory || approvalHistory.length < 3) return false;
+  const recent = approvalHistory.slice(-3);
+  return recent.every(a => a < 20);
+}
+
+export function executeRecallVote(approval, satisfactions, deputies) {
+  const avgSat = Object.values(satisfactions).reduce((a, b) => a + b, 0) / Object.values(satisfactions).length;
+  const recallSupport = (100 - approval) * 0.4 + (100 - avgSat) * 0.3;
+  const dumaSupport = deputies.filter(d => d.loyalty < 25).length;
+  return recallSupport > 60 && dumaSupport >= 4;
+}

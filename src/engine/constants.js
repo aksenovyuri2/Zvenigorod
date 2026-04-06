@@ -20,13 +20,13 @@ export const GROUPS = {
 };
 export const GROUP_KEYS = Object.keys(GROUPS);
 
-export const INIT_METRICS = { infrastructure:35, ecology:65, culture:45, digital:20, safety:40, healthcare:35, education:40, economy:30 };
-export const INIT_BUDGET = 850;
+export const INIT_METRICS = { infrastructure:30, ecology:55, culture:40, digital:15, safety:35, healthcare:30, education:35, economy:25 };
+export const INIT_BUDGET = 500;
 export const INIT_POP = 25000;
 export const MAX_TURNS = 40;
 export const ELECTION_TURN = 20;
 export const MAX_PICKS = 2;
-export const INIT_APPROVAL = 60;
+export const INIT_APPROVAL = 55;
 
 export const SEASON_NAMES = ["Зима","Весна","Лето","Осень"];
 export const SEASON_EFFECTS = [
@@ -38,10 +38,10 @@ export const SEASON_EFFECTS = [
 
 // Difficulty levels for v3
 export const DIFFICULTIES = {
-  easy:   { label: "Лёгкий",   decayMult: 0.5, eventProb: 0.24, budgetMult: 1.3, maxPicks: 3 },
-  normal: { label: "Нормальный", decayMult: 1.0, eventProb: 0.4,  budgetMult: 1.0, maxPicks: 2 },
-  hard:   { label: "Сложный",   decayMult: 1.5, eventProb: 0.28, budgetMult: 0.8, maxPicks: 2 },
-  hardcore:{ label: "Хардкор",  decayMult: 2.0, eventProb: 0.5,  budgetMult: 0.6, maxPicks: 2, crisisEvery: 5, oppositionMult: 2 },
+  easy:   { label: "Лёгкий",   decayMult: 0.7, eventProb: 0.24, budgetMult: 1.4, maxPicks: 3, revenueMult: 1.2 },
+  normal: { label: "Нормальный", decayMult: 1.0, eventProb: 0.4,  budgetMult: 1.0, maxPicks: 2, revenueMult: 1.0 },
+  hard:   { label: "Сложный",   decayMult: 1.3, eventProb: 0.28, budgetMult: 0.7, maxPicks: 2, revenueMult: 0.85 },
+  hardcore:{ label: "Хардкор",  decayMult: 1.8, eventProb: 0.5,  budgetMult: 0.5, maxPicks: 1, revenueMult: 0.7 },
 };
 
 // Scenarios for v3
