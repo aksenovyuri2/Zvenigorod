@@ -105,6 +105,37 @@ export const ALL_EVENTS = [
       { label:"Отказать", effects:{}, budget:0 },
     ] },
   { id:"christmas_fair", text:"🎄 Рождественская ярмарка прошла с аншлагом!", effects:{culture:4,economy:3}, budget:15, season:3 },
+  // New events v3.5
+  { id:"gas_leak", text:"💨 Утечка газа на ул. Московской. Эвакуация!", effects:{safety:-6,infrastructure:-3}, budget:-35, approval:-3 },
+  { id:"sports_medal", text:"🥇 Спортсмен из Звенигорода взял олимпийское золото!", effects:{culture:5,education:3}, budget:0, population:200 },
+  { id:"road_accident", text:"🚗 Серия ДТП на нерегулируемых перекрёстках.", effects:{safety:-4,infrastructure:-2}, budget:0, approval:-3, requires:{safety_lt:40} },
+  { id:"heritage_site", text:"🏛️ ЮНЕСКО рассматривает монастырь как наследие.",
+    choices:[
+      { label:"Подать заявку (затратно, но престижно)", effects:{culture:10,economy:5}, budget:-100 },
+      { label:"Не подавать — слишком дорого", effects:{}, budget:0 },
+    ] },
+  { id:"cyber_attack", text:"💻 Хакеры атаковали городские системы!", effects:{digital:-6,safety:-3}, budget:-25, requires:{digital:40} },
+  { id:"startup_exit", text:"🚀 Стартап из Звенигорода продан за $50M!", effects:{economy:6,digital:4}, budget:30, population:200 },
+  { id:"water_contamination", text:"☠️ Загрязнение водопроводной воды!", effects:{healthcare:-8,ecology:-4}, budget:-60, approval:-5, requires:{infrastructure_lt:45} },
+  { id:"street_art_festival", text:"🎨 Фестиваль уличного искусства привлёк тысячи!", effects:{culture:5,economy:2}, budget:0, population:150 },
+  { id:"volunteer_wave", text:"🤝 Волонтёрское движение набирает силу!", effects:{safety:3,healthcare:2,culture:2}, budget:0, approval:3 },
+  { id:"real_estate_boom", text:"🏠 Цены на жильё стремительно растут!",
+    choices:[
+      { label:"Ввести ценовые ограничения", effects:{economy:-3,safety:2}, budget:0, approval:3 },
+      { label:"Дать рынку регулировать", effects:{economy:4}, budget:0, approval:-3 },
+    ] },
+  { id:"celebrity_move", text:"⭐ Знаменитость переехала в Звенигород!", effects:{culture:4,economy:3}, budget:0, population:100 },
+  { id:"power_outage", text:"⚡ Массовое отключение электричества на 3 дня!", effects:{infrastructure:-5,safety:-3,digital:-2}, budget:-40 },
+  { id:"mosfilm_shooting", text:"🎬 Мосфильм хочет снимать сериал в Звенигороде!",
+    choices:[
+      { label:"Перекрыть улицы для съёмок", effects:{culture:6,economy:4,infrastructure:-2}, budget:20 },
+      { label:"Разрешить, но без закрытия улиц", effects:{culture:3,economy:2}, budget:10 },
+    ] },
+  { id:"school_crisis", text:"📚 Учителя массово увольняются из-за зарплат!",
+    choices:[
+      { label:"Повысить зарплаты", effects:{education:5}, budget:-60, approval:3 },
+      { label:"Привлечь волонтёров и студентов", effects:{education:2}, budget:-15, approval:-2 },
+    ] },
   // Milestone events
   { id:"milestone_10", text:"📊 Губернатор лично приехал проверить прогресс Звенигорода. «Посмотрим, что покажете дальше».", minTurn:10,
     choices:[
@@ -171,4 +202,7 @@ export const ELECTION_PROMISES = [
   { id:"edu_promise", label:"Удвоить бюджет на образование", bonus:{education:5}, check:{metric:"education",min:70,byTurn:30}, penalty:-10 },
   { id:"infra_promise", label:"Победить пробки", bonus:{infrastructure:5}, check:{metric:"infrastructure",min:70,byTurn:30}, penalty:-10 },
   { id:"eco_promise", label:"Сделать город зелёным", bonus:{ecology:5}, check:{metric:"ecology",min:70,byTurn:30}, penalty:-10 },
+  { id:"digital_promise", label:"Превратить в умный город", bonus:{digital:5}, check:{metric:"digital",min:60,byTurn:30}, penalty:-10 },
+  { id:"safety_promise", label:"Искоренить преступность", bonus:{safety:5}, check:{metric:"safety",min:70,byTurn:30}, penalty:-10 },
+  { id:"health_promise", label:"Современная медицина каждому", bonus:{healthcare:5}, check:{metric:"healthcare",min:65,byTurn:30}, penalty:-10 },
 ];

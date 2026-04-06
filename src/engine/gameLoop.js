@@ -28,6 +28,7 @@ import { processNPCTurn, selectLetterWriters } from "../npc/npcEngine.js";
 import { generateDeputies, checkImpeachment, checkRecallVote, executeRecallVote } from "../political/dumaEngine.js";
 import { checkProtests, processProtests } from "./protestEngine.js";
 import { initNeighborRelations, checkHostileActions, advanceJointProject, resetTurnFlags, applyDiplomaticAction, startJointProject, JOINT_PROJECTS } from "../political/diplomacy.js";
+import { initRivalCities, processRivalTurn } from "./rivalCities.js";
 
 // ── Internal helpers ──
 
@@ -194,6 +195,8 @@ export function createInitialState(seed, scenarioId = "standard", difficultyId =
     economy,
     // v3 Projects
     projects: [], projectProblems: [], pendingContractorChoice: null,
+    // v3 Rival cities
+    rivalCities: initRivalCities(rng), rivalNews: [],
     // v3 Protests & Exile
     activeProtests: [], approvalHistory: [], exiled: false, resolvedProtests: 0,
     // v3 Crises
@@ -264,6 +267,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   const newDecisionHistory = { ...state.decisionHistory };
   const newUsedOnce = [...state.usedOnceDecisions];
   let newProjects = [...state.projects];
+  const existingProjectCount = newProjects.length;
   const newProjectProblems = [];
 
   for (const id of selectedIds) {
@@ -292,10 +296,11 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
     if (dec.id === "festival") newEventQueue.push({ eventId: "festival_forbes", targetTurn: state.turn + 2 });
   }
 
-  // ── 4. Advance existing projects ──
+  // ── 4. Advance existing projects (skip newly created this turn) ──
   const advancedProjects = [];
-  for (const proj of newProjects) {
-    if (proj.status === "building" && proj.currentTurn > 0) {
+  for (let i = 0; i < newProjects.length; i++) {
+    const proj = newProjects[i];
+    if (proj.status === "building" && i < existingProjectCount) {
       const { project: advanced, problem } = advanceProject(proj, rng);
       advancedProjects.push({ ...advanced, currentProblem: problem || null });
       if (problem) newProjectProblems.push({ projectName: proj.name, ...problem });
@@ -431,6 +436,10 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   const zvScore = calcZvenigorodScore(metrics, population, satisfactions);
   const globalRankIdx = getZvenigorodRankIdx(zvScore);
 
+  // ── 12b. Rival cities ──
+  const updatedRivals = processRivalTurn(state.rivalCities || [], rng, zvScore);
+  const rivalNews = updatedRivals.filter(c => c.lastEvent).map(c => c.lastEvent);
+
   // ── 13. NPC processing ──
   const { updatedNPCs, departed, arrived } = processNPCTurn(state.npcs || [], metrics, state.turn + 1, rng, state.approval + approvalDelta);
   const letterWriters = selectLetterWriters(updatedNPCs, state.turn + 1);
@@ -564,6 +573,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
     neighborRelations: newNeighborRelations, diplomaticResults: [], completedJointProjects: newCompletedJointProjects,
     activeProtests: newActiveProtests, approvalHistory, exiled, resolvedProtests: newResolvedProtests,
     seasonCostMod, respondedLetters: [],
+    rivalCities: updatedRivals, rivalNews,
   };
 }
 
@@ -622,6 +632,8 @@ export function gameReducer(state, action) {
       return { ...state, crisisActionChosen: true, phase: state.currentEvent ? "event" : "decisions" };
     case "START_ELECTION":
       return { ...state, phase: "election_vote" };
+    case "SHOW_ELECTION_LOSS":
+      return { ...state, phase: "election_loss" };
     case "ELECTION_RESULT": {
       const rng = createRNG(state.seed);
       const opponent = rng.pick(OPPONENTS);
@@ -633,8 +645,7 @@ export function gameReducer(state, action) {
       const winProb = state.approval * 0.40 + attrGrowth * 0.25 + popGrowth * 0.15 + noBankBonus * 0.10 + randomF * 0.10;
       const won = winProb >= 50;
       const votePercent = Math.max(30, Math.min(70, 50 + (winProb - 50) * 0.4));
-      const resultPhase = won ? "election_result" : "election_loss";
-      return { ...state, phase: resultPhase, electionResult: { won, votePercent: Math.round(votePercent * 10) / 10, opponent }, seed: rng.getSeed() };
+      return { ...state, phase: "election_result", electionResult: { won, votePercent: Math.round(votePercent * 10) / 10, opponent }, seed: rng.getSeed() };
     }
     case "CHOOSE_PROMISE": {
       const promise = ELECTION_PROMISES[action.index];
@@ -717,5 +728,6 @@ export { METRICS_CFG, GROUPS, DIFFICULTIES, SCENARIOS } from "./constants.js";
 export { ALL_DECISIONS };
 export { ALL_EVENTS, ADVISORS, OPPONENTS, ACHIEVEMENTS, ELECTION_PROMISES };
 export { WORLD_CITIES };
+export { RIVAL_CITIES } from "./rivalCities.js";
 export { getGrade, getPlayStyle };
 export { calcGroupSatisfactions, calcAvgSatisfaction } from "./calculator.js";

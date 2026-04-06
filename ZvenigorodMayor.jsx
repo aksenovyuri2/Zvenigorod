@@ -10,14 +10,14 @@ import {
   Award, Zap, Globe, ThumbsUp, Info, Newspaper,
   Bug, Skull, Megaphone, Waves, ShieldAlert, UserMinus,
   Landmark, Briefcase, HelpCircle, Rocket,
-  PanelLeftClose, PanelLeftOpen, Star, Sparkles,
+  PanelLeftClose, PanelLeftOpen, Star, Sparkles, Map,
 } from "lucide-react";
 
 // Import v3 engine
 import {
   gameReducer, createInitialState,
   METRIC_KEYS, METRICS_CFG as METRICS_CFG_RAW, GROUPS, MAX_TURNS, MAX_PICKS, ELECTION_TURN, INIT_POP,
-  ALL_DECISIONS, ALL_EVENTS, ACHIEVEMENTS, ELECTION_PROMISES, WORLD_CITIES,
+  ALL_DECISIONS, ALL_EVENTS, ACHIEVEMENTS, ELECTION_PROMISES, WORLD_CITIES, RIVAL_CITIES,
   DIFFICULTIES, SCENARIOS,
   getGrade as getGradeEngine, getPlayStyle as getPlayStyleEngine,
   calcGroupSatisfactions, calcAvgSatisfaction,
@@ -508,6 +508,115 @@ function MilestoneToast({ turn, metrics }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// CITY MAP — Interactive visualization of Zvenigorod districts
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DISTRICT_MAP = [
+  { id: "upper", name: "Верхний Посад", x: 35, y: 15, w: 30, h: 18, metric: "culture", emoji: "🏛️" },
+  { id: "lower", name: "Нижний Посад", x: 30, y: 35, w: 25, h: 16, metric: "economy", emoji: "🏪" },
+  { id: "savvino", name: "Саввинская слобода", x: 5, y: 25, w: 22, h: 20, metric: "ecology", emoji: "⛪" },
+  { id: "dyutkovo", name: "Дютьково", x: 5, y: 50, w: 20, h: 18, metric: "culture", emoji: "🎨" },
+  { id: "vvedenskoe", name: "Введенское", x: 60, y: 10, w: 22, h: 18, metric: "healthcare", emoji: "🏥" },
+  { id: "suponevo", name: "Супонево", x: 65, y: 30, w: 20, h: 16, metric: "education", emoji: "🏫" },
+  { id: "station", name: "Ж/Д станция", x: 58, y: 50, w: 22, h: 16, metric: "infrastructure", emoji: "🚂" },
+  { id: "moskovskaya", name: "ул. Московская", x: 28, y: 55, w: 28, h: 12, metric: "digital", emoji: "📡" },
+  { id: "pochtovaya", name: "Почтовая ул.", x: 35, y: 70, w: 20, h: 12, metric: "safety", emoji: "🛡️" },
+  { id: "eastern", name: "мкр. Восточный", x: 60, y: 70, w: 25, h: 14, metric: "infrastructure", emoji: "🏗️" },
+  { id: "waterfront", name: "Набережная", x: 10, y: 75, w: 45, h: 10, metric: "ecology", emoji: "🌊" },
+];
+
+function CityMapModal({ metrics, projects, decisionHistory, onClose }) {
+  const [hovered, setHovered] = useState(null);
+
+  // Determine built objects from decision history
+  const builtItems = useMemo(() => {
+    const items = [];
+    for (const [id, count] of Object.entries(decisionHistory || {})) {
+      const dec = ALL_DECISIONS.find(d => d.id === id);
+      if (dec && count > 0) items.push({ name: dec.name, cat: dec.cat || "economy", count });
+    }
+    return items;
+  }, [decisionHistory]);
+
+  const activeProjects = (projects || []).filter(p => p.status === "building");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-3xl border border-[#e0e0e0] p-4 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-bold text-[#191c1f] flex items-center gap-2"><Map size={20} className="text-[#4f55f1]" />Карта Звенигорода</h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#f0f0f0]"><X size={18} className="text-[#6b7280]" /></button>
+        </div>
+        {/* SVG Map */}
+        <div className="relative w-full" style={{ paddingBottom: "55%" }}>
+          <svg viewBox="0 0 100 90" className="absolute inset-0 w-full h-full">
+            {/* River */}
+            <path d="M 0 80 Q 25 72 50 78 Q 75 84 100 76" fill="none" stroke="#93c5fd" strokeWidth="1.5" opacity="0.5" />
+            {DISTRICT_MAP.map(d => {
+              const val = metrics[d.metric] || 30;
+              const cfg = METRICS_CFG[d.metric];
+              const isHovered = hovered === d.id;
+              const opacity = 0.15 + (val / 100) * 0.5;
+              return (
+                <g key={d.id} onMouseEnter={() => setHovered(d.id)} onMouseLeave={() => setHovered(null)} style={{ cursor: "pointer" }}>
+                  <rect x={d.x} y={d.y} width={d.w} height={d.h} rx="2" ry="2"
+                    fill={cfg?.color || "#888"} opacity={opacity}
+                    stroke={isHovered ? cfg?.color || "#888" : "#e0e0e0"} strokeWidth={isHovered ? "0.8" : "0.3"} />
+                  <text x={d.x + d.w / 2} y={d.y + d.h / 2 - 1} textAnchor="middle" fontSize="3.5" fill="#191c1f" fontWeight="600">{d.emoji}</text>
+                  <text x={d.x + d.w / 2} y={d.y + d.h / 2 + 3.5} textAnchor="middle" fontSize="2" fill="#6b7280">{d.name}</text>
+                </g>
+              );
+            })}
+            {/* Active construction sites */}
+            {activeProjects.map((p, i) => {
+              const district = DISTRICT_MAP[i % DISTRICT_MAP.length];
+              return (
+                <g key={p.name}>
+                  <text x={district.x + district.w - 2} y={district.y + 3} fontSize="3" textAnchor="end">🚧</text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        {/* Hovered district info */}
+        {hovered && (() => {
+          const d = DISTRICT_MAP.find(x => x.id === hovered);
+          const val = metrics[d.metric] || 30;
+          const cfg = METRICS_CFG[d.metric];
+          const districtBuilt = builtItems.filter(b => b.cat === d.metric).slice(0, 3);
+          return (
+            <div className="mt-2 p-3 rounded-xl bg-[#f7f7f7] border border-[#e0e0e0]">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-bold text-[#191c1f]">{d.emoji} {d.name}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${cfg?.color}20`, color: cfg?.color }}>{cfg?.name}: {Math.round(val)}</span>
+              </div>
+              {districtBuilt.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {districtBuilt.map(b => <span key={b.name} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#e8e8e8] text-[#6b7280]">{b.name} ×{b.count}</span>)}
+                </div>
+              )}
+              {districtBuilt.length === 0 && <div className="text-[10px] text-[#9ca3af]">Пока нет построек в этом районе</div>}
+            </div>
+          );
+        })()}
+        {/* Legend */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {METRIC_KEYS.map(k => {
+            const cfg = METRICS_CFG[k];
+            return (
+              <div key={k} className="flex items-center gap-1 text-[10px]">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
+                <span className="text-[#6b7280]">{cfg.name}: {Math.round(metrics[k])}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DecisionPhase({ state, dispatch }) {
   const { turn, budget, debt, population, metrics, prevMetrics, selectedDecisions, availableDecisions, globalRankIdx, satisfactions, prevSatisfactions, recurringEffects, costMultiplier, costMultiplierTurns, approval, zvenigorodScore, advisorComments } = state;
   const totalCost = selectedDecisions.reduce((s, id) => { const d = ALL_DECISIONS.find(x => x.id === id); return s + (d ? Math.round(d.cost * (costMultiplier || 1)) : 0); }, 0);
@@ -529,6 +638,8 @@ function DecisionPhase({ state, dispatch }) {
   const [hoveredDecision, setHoveredDecision] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmSkip, setConfirmSkip] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const maxPicks = (state.difficulty || {}).maxPicks || MAX_PICKS;
   // Notification dots
   const hasLetters = (state.npcLetters || []).length > 0 && (state.respondedLetters || []).length < (state.npcLetters || []).length;
   const hasProtests = (state.activeProtests || []).length > 0;
@@ -571,10 +682,11 @@ function DecisionPhase({ state, dispatch }) {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      {showMap && <CityMapModal metrics={metrics} projects={state.projects} decisionHistory={state.decisionHistory} onClose={() => setShowMap(false)} />}
       {(turn === 10 || turn === 30) && <MilestoneToast turn={turn} metrics={metrics} />}
       <FadeIn className="flex flex-col overflow-hidden h-full">
         {/* Header */}
-        <div className="px-4 pt-2 pb-1 shrink-0">
+        <div className="px-4 pt-1.5 pb-0.5 shrink-0">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-3">
               <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-1 rounded-lg hover:bg-[#f0f0f0] transition-colors" title="Панель метрик">
@@ -586,6 +698,9 @@ function DecisionPhase({ state, dispatch }) {
               <span className="flex items-center gap-1 text-xs text-[#6b7280]"><SeasonIcon size={14} />{SEASON_NAMES[season]}</span>
             </div>
             <div className="flex items-center gap-3">
+              <button onClick={() => setShowMap(true)} className="p-1 rounded-lg hover:bg-[#f0f0f0] transition-colors" title="Карта города">
+                <Map size={16} className="text-[#4f55f1]" />
+              </button>
               <div className="flex items-center gap-1" title="Одобрение мэра">
                 <ThumbsUp size={14} className={approval >= 60 ? "text-[#00a87e]" : approval >= 40 ? "text-[#ec7e00]" : "text-[#e23b4a]"} />
                 <span className="text-sm font-bold text-[#191c1f]">{Math.round(approval)}%</span>
@@ -602,7 +717,7 @@ function DecisionPhase({ state, dispatch }) {
         </div>
 
         {/* Stats Bar */}
-        <div className="flex items-center gap-3 px-4 py-1.5 mx-4 rounded-2xl bg-[#f7f7f7] border border-[#ebebeb] text-xs shrink-0">
+        <div className="flex items-center gap-3 px-4 py-1 mx-4 rounded-xl bg-[#f7f7f7] border border-[#ebebeb] text-xs shrink-0">
           <div className="flex items-center gap-1">
             <Coins size={13} className={budget < 100 ? "text-[#e23b4a]" : budget < 300 ? "text-[#ec7e00]" : "text-[#ec7e00]"} />
             <span className={`font-bold ${budget < 100 ? "text-[#e23b4a]" : budget < 300 ? "text-[#ec7e00]" : "text-[#191c1f]"}`}>{Math.round(budget)}</span>
@@ -621,13 +736,18 @@ function DecisionPhase({ state, dispatch }) {
           </div>
         </div>
 
-        {costMultiplierTurns > 0 && <div className="mx-4 mt-1 px-4 py-1.5 rounded-full bg-[#f7f7f7] border border-[#e0e0e0] text-[#ec7e00] text-xs shrink-0">Цены на строительство +20% (осталось: {costMultiplierTurns})</div>}
-        {(state.seasonCostMod || 1) !== 1 && <div className={`mx-4 mt-1 px-4 py-1.5 rounded-full bg-[#f7f7f7] border border-[#e0e0e0] text-xs shrink-0 ${state.seasonCostMod > 1 ? "text-[#e23b4a]" : "text-[#00a87e]"}`}>{state.seasonCostMod > 1 ? "❄️ Зимняя наценка +15% на решения" : "☀️ Летняя скидка -5% на решения"}</div>}
-        {debt > 500 && <div className="mx-4 mt-1 px-4 py-1.5 rounded-full border text-xs bg-[#f7f7f7] border-[#e0e0e0] text-[#e23b4a] shrink-0">Долг: {Math.round(debt)} млн (Штраф: -2 ко всем метрикам!)</div>}
-        {METRIC_KEYS.some(k => metrics[k] < 20) && <div className="mx-4 mt-1 px-4 py-1.5 rounded-full bg-[#f7f7f7] border border-[#e0e0e0] text-[#e23b4a] text-xs flex items-center gap-2 shrink-0"><AlertTriangle size={14} />Критическая ситуация: {METRIC_KEYS.filter(k=>metrics[k]<20).map(k=>METRICS_CFG[k].name).join(", ")}</div>}
+        {/* Compact alerts row */}
+        {(costMultiplierTurns > 0 || (state.seasonCostMod || 1) !== 1 || debt > 500 || METRIC_KEYS.some(k => metrics[k] < 20)) && (
+          <div className="flex flex-wrap gap-1 px-4 mt-1 shrink-0">
+            {costMultiplierTurns > 0 && <span className="px-2 py-0.5 rounded-full bg-[#f7f7f7] border border-[#e0e0e0] text-[#ec7e00] text-[10px]">🏗️ +20% цены ({costMultiplierTurns} ход.)</span>}
+            {(state.seasonCostMod || 1) !== 1 && <span className={`px-2 py-0.5 rounded-full bg-[#f7f7f7] border border-[#e0e0e0] text-[10px] ${state.seasonCostMod > 1 ? "text-[#e23b4a]" : "text-[#00a87e]"}`}>{state.seasonCostMod > 1 ? "❄️ +15% зима" : "☀️ -5% лето"}</span>}
+            {debt > 500 && <span className="px-2 py-0.5 rounded-full bg-[#f7f7f7] border border-[#e0e0e0] text-[#e23b4a] text-[10px]">💸 Долг: {Math.round(debt)} млн</span>}
+            {METRIC_KEYS.some(k => metrics[k] < 20) && <span className="px-2 py-0.5 rounded-full bg-[#f7f7f7] border border-[#e0e0e0] text-[#e23b4a] text-[10px]">⚠️ {METRIC_KEYS.filter(k=>metrics[k]<20).map(k=>METRICS_CFG[k].name).join(", ")}</span>}
+          </div>
+        )}
 
         {/* Main content */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 px-4 pb-2 overflow-hidden">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-2 px-4 pb-1.5 overflow-hidden">
           {/* Sidebar */}
           <div className={`lg:col-span-4 overflow-y-auto pr-1 space-y-3 transition-all duration-300 ${sidebarOpen ? "block" : "hidden lg:block"}`}>
             <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-3">
@@ -672,16 +792,28 @@ function DecisionPhase({ state, dispatch }) {
             {state.economy && (() => {
               const econ = state.economy;
               const RATES = [5, 8, 10, 12, 15];
+              const TAX_INFO = { 5: { rev: 0.7, econ: +4 }, 8: { rev: 0.85, econ: +2 }, 10: { rev: 1.0, econ: 0 }, 12: { rev: 1.1, econ: -2 }, 15: { rev: 1.2, econ: -5 } };
               const canChange = state.turn - (econ.lastTaxChangeTurn || -99) >= 4;
               const taxColor = econ.taxRate <= 8 ? "text-[#00a87e]" : econ.taxRate >= 12 ? "text-[#e23b4a]" : "text-[#ec7e00]";
+              const currentRev = calcRevenue(population, metrics, TAX_INFO[econ.taxRate].rev);
               return (
                 <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-3">
                   <h2 className="text-xs font-bold text-[#6b7280] uppercase tracking-wider mb-2">Экономика</h2>
-                  <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    <div className="text-center">
+                      <div className="text-[10px] text-[#9ca3af] mb-0.5">ВВП</div>
+                      <div className="text-sm font-bold text-[#191c1f]">{(econ.gdp/1000).toFixed(1)}м</div>
+                    </div>
                     <div className="text-center">
                       <div className="text-[10px] text-[#9ca3af] mb-0.5">Безработица</div>
                       <div className={`text-sm font-bold ${econ.unemployment > 15 ? "text-[#e23b4a]" : econ.unemployment < 8 ? "text-[#00a87e]" : "text-[#ec7e00]"}`}>{econ.unemployment}%</div>
                     </div>
+                    <div className="text-center">
+                      <div className="text-[10px] text-[#9ca3af] mb-0.5">Инфляция</div>
+                      <div className={`text-sm font-bold ${econ.inflation > 10 ? "text-[#e23b4a]" : econ.inflation < 5 ? "text-[#00a87e]" : "text-[#ec7e00]"}`}>{econ.inflation}%</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
                     <div className="text-center">
                       <div className="text-[10px] text-[#9ca3af] mb-0.5">Зарплата</div>
                       <div className="text-sm font-bold text-[#191c1f]">{(econ.avgSalary/1000).toFixed(0)}к</div>
@@ -689,6 +821,10 @@ function DecisionPhase({ state, dispatch }) {
                     <div className="text-center">
                       <div className="text-[10px] text-[#9ca3af] mb-0.5">Бизнесов</div>
                       <div className="text-sm font-bold text-[#4f55f1]">{econ.businessCount}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-[10px] text-[#9ca3af] mb-0.5">Жильё</div>
+                      <div className="text-sm font-bold text-[#191c1f]">{(econ.housingPrice/1000).toFixed(0)}к</div>
                     </div>
                   </div>
                   <div>
@@ -698,17 +834,34 @@ function DecisionPhase({ state, dispatch }) {
                       {!canChange && <span className="text-[10px] text-[#9ca3af]">кд {4 - (state.turn - (econ.lastTaxChangeTurn || -99))} ход.</span>}
                     </div>
                     <div className="flex gap-1">
-                      {RATES.map(r => (
-                        <button key={r}
-                          onClick={() => dispatch({ type: "CHANGE_TAX", rate: r })}
-                          disabled={!canChange || r === econ.taxRate}
-                          className={`flex-1 py-1 text-[10px] font-bold rounded-full transition-colors ${r === econ.taxRate ? "bg-[#4f55f1] text-white" : canChange ? "bg-[#e8e8e8] hover:bg-[#e0e0e0] text-[#191c1f]" : "bg-[#f7f7f7] text-[#9ca3af] cursor-default"}`}>
-                          {r}%
-                        </button>
-                      ))}
+                      {RATES.map(r => {
+                        const info = TAX_INFO[r];
+                        const previewRev = calcRevenue(population, metrics, info.rev);
+                        const revDelta = previewRev - currentRev;
+                        const isActive = r === econ.taxRate;
+                        return (
+                          <div key={r} className="flex-1 group relative">
+                            <button
+                              onClick={() => dispatch({ type: "CHANGE_TAX", rate: r })}
+                              disabled={!canChange || isActive}
+                              className={`w-full py-1 text-[10px] font-bold rounded-full transition-colors ${isActive ? "bg-[#4f55f1] text-white" : canChange ? "bg-[#e8e8e8] hover:bg-[#e0e0e0] text-[#191c1f]" : "bg-[#f7f7f7] text-[#9ca3af] cursor-default"}`}>
+                              {r}%
+                            </button>
+                            {canChange && !isActive && (
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-20">
+                                <div className="bg-[#191c1f] text-white text-[9px] rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                                  <div>Доход: {revDelta >= 0 ? "+" : ""}{revDelta} млн</div>
+                                  <div>Экономика: {info.econ >= 0 ? "+" : ""}{info.econ}/ход</div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="mt-1 text-[10px] text-[#9ca3af] text-center">
-                      {econ.taxRate < 10 ? "↓ меньше доходов, ↑ экономика" : econ.taxRate > 10 ? "↑ больше доходов, ↓ экономика" : "Стандартная ставка"}
+                    <div className="mt-1.5 flex items-center justify-between text-[10px] text-[#9ca3af]">
+                      <span>Доход: {currentRev} млн/ход</span>
+                      <span>Расход: {calcMandatoryExpenses(population, metrics)} млн/ход</span>
                     </div>
                   </div>
                 </div>
@@ -825,7 +978,7 @@ function DecisionPhase({ state, dispatch }) {
             {/* Tabs: Группы / Рейтинг / Соседи / Дума / Жители */}
             <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-3">
               <div className="flex gap-1 mb-3 flex-wrap">
-                {[["groups","Группы"],["rank","Рейтинг"],["diplomacy","Соседи"],["duma","Дума"],["residents","Жители"]].map(([tab, label]) => (
+                {[["groups","Группы"],["rank","Рейтинг"],["rivals","Конкуренты"],["diplomacy","Соседи"],["duma","Дума"],["residents","Жители"]].map(([tab, label]) => (
                   <button key={tab} onClick={() => setSidebarTab(tab)}
                     className={`relative flex-1 py-1 text-[11px] font-semibold rounded-full transition-colors ${sidebarTab === tab ? "bg-[#4f55f1] text-white" : "bg-[#e8e8e8] text-[#6b7280] hover:text-[#191c1f]"}`}>
                     {label}
@@ -842,6 +995,52 @@ function DecisionPhase({ state, dispatch }) {
 
               {sidebarTab === "rank" && (
                 <RankingTable zvScore={zvenigorodScore} rankIdx={globalRankIdx} expanded={showRankFull} onToggle={() => setShowRankFull(!showRankFull)} />
+              )}
+
+              {sidebarTab === "rivals" && (
+                <div className="space-y-2">
+                  {/* Player's city */}
+                  <div className="rounded-xl bg-[#4f55f1]/10 border border-[#4f55f1]/30 p-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#191c1f] font-bold">🏛️ Звенигород (вы)</span>
+                      <span className="text-[#4f55f1] font-bold font-mono">{Math.round(zvenigorodScore)}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-[#e8e8e8] overflow-hidden mt-1">
+                      <div className="h-full rounded-full bg-[#4f55f1] transition-all duration-500" style={{ width: `${Math.min(100, zvenigorodScore)}%` }} />
+                    </div>
+                  </div>
+                  {/* Rival cities sorted by score */}
+                  {[...(state.rivalCities || [])].sort((a, b) => b.score - a.score).map(city => {
+                    const ahead = zvenigorodScore >= city.score;
+                    const gap = Math.round(zvenigorodScore - city.score);
+                    return (
+                      <div key={city.id} className="rounded-xl bg-[#f0f0f0] p-2">
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-[#191c1f] font-semibold">{city.icon} {city.name}</span>
+                          <div className="flex items-center gap-1.5">
+                            {city.trend !== 0 && <span className={`text-[10px] ${city.trend > 0 ? "text-[#00a87e]" : "text-[#e23b4a]"}`}>{city.trend > 0 ? "▲" : "▼"}</span>}
+                            <span className="font-mono font-bold text-[#191c1f]">{Math.round(city.score)}</span>
+                          </div>
+                        </div>
+                        <div className="h-1 rounded-full bg-[#e8e8e8] overflow-hidden mb-1">
+                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, city.score)}%`, backgroundColor: ahead ? "#e8e8e8" : "#ef4444" }} />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-[#9ca3af] italic">{city.personality}</span>
+                          <span className={ahead ? "text-[#00a87e]" : "text-[#e23b4a]"}>{gap > 0 ? "+" : ""}{gap}</span>
+                        </div>
+                        {city.lastEvent && <div className="text-[10px] text-[#6b7280] mt-0.5 truncate">📰 {city.lastEvent}</div>}
+                      </div>
+                    );
+                  })}
+                  {/* Rival news */}
+                  {(state.rivalNews || []).length > 0 && (
+                    <div className="text-[10px] text-[#9ca3af] border-t border-[#e0e0e0] pt-1.5 mt-1">
+                      <div className="font-semibold text-[#6b7280] mb-0.5">Новости конкурентов:</div>
+                      {state.rivalNews.map((n, i) => <div key={i}>• {n}</div>)}
+                    </div>
+                  )}
+                </div>
               )}
 
               {sidebarTab === "residents" && (() => {
@@ -928,13 +1127,27 @@ function DecisionPhase({ state, dispatch }) {
 
               {sidebarTab === "diplomacy" && (
                 <div className="space-y-2">
+                  {(() => {
+                    const summit = DIPLOMATIC_ACTIONS.find(a => a.id === "summit");
+                    if (!summit) return null;
+                    return (
+                      <div className="relative group">
+                        <button
+                          onClick={() => dispatch({ type: "APPLY_DIPLOMATIC_ACTION", neighborId: NEIGHBORS[0].id, actionId: "summit" })}
+                          disabled={budget < summit.baseCost}
+                          className="w-full py-1.5 bg-[#4f55f1] hover:bg-[#4f55f1]/90 disabled:opacity-40 text-white text-[10px] font-bold rounded-full transition-colors">
+                          🏛️ Саммит всех городов (−{summit.baseCost} млн, +{summit.relationshipDelta} ко всем)
+                        </button>
+                      </div>
+                    );
+                  })()}
                   {NEIGHBORS.map(n => {
                     const rel = (state.neighborRelations || {})[n.id] || { relationship: 0, actionThisTurn: false };
                     const rv = rel.relationship;
                     const relColor = rv > 30 ? "text-[#00a87e]" : rv < -30 ? "text-[#e23b4a]" : "text-[#ec7e00]";
                     const barWidth = Math.max(0, Math.min(100, (rv + 100) / 2));
                     const barColor = rv > 0 ? "#10b981" : "#ef4444";
-                    const availableActions = DIPLOMATIC_ACTIONS.filter(a => !a.allNeighbors && a.id !== "compete" && a.id !== "joint_project");
+                    const availableActions = DIPLOMATIC_ACTIONS.filter(a => !a.allNeighbors && a.id !== "joint_project");
                     const availableProjects = JOINT_PROJECTS.filter(p => p.partner === n.id && rv >= p.relationshipRequired);
                     const isPicking = projectPickerFor === n.id;
                     return (
@@ -986,13 +1199,25 @@ function DecisionPhase({ state, dispatch }) {
                         ) : (
                           <div className="flex flex-wrap gap-1">
                             {availableActions.map(a => (
-                              <button key={a.id}
-                                onClick={() => dispatch({ type: "APPLY_DIPLOMATIC_ACTION", neighborId: n.id, actionId: a.id })}
-                                disabled={budget < (a.baseCost || 0)}
-                                className="px-1.5 py-0.5 bg-[#e8e8e8] hover:bg-[#e0e0e0] disabled:opacity-40 text-[#191c1f] rounded-full text-[10px] transition-colors"
-                                title={`${a.name}${a.baseCost ? ` (−${a.baseCost} млн)` : " (бесплатно)"}`}>
-                                {a.name.split(" ").slice(0, 2).join(" ")}
-                              </button>
+                              <div key={a.id} className="relative group">
+                                <button
+                                  onClick={() => dispatch({ type: "APPLY_DIPLOMATIC_ACTION", neighborId: n.id, actionId: a.id })}
+                                  disabled={budget < (a.baseCost || 0)}
+                                  className="px-1.5 py-0.5 bg-[#e8e8e8] hover:bg-[#e0e0e0] disabled:opacity-40 text-[#191c1f] rounded-full text-[10px] transition-colors">
+                                  {a.name.split(" ").slice(0, 2).join(" ")}
+                                </button>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-20">
+                                  <div className="bg-[#191c1f] text-white text-[9px] rounded-lg px-2 py-1.5 whitespace-nowrap shadow-lg">
+                                    <div className="font-semibold mb-0.5">{a.name}</div>
+                                    {a.baseCost > 0 && <div>Стоимость: {a.baseCost} млн</div>}
+                                    <div>Отношения: {a.relationshipDelta > 0 ? "+" : ""}{a.relationshipDelta}</div>
+                                    {a.effects && Object.entries(a.effects).map(([k, v]) => (
+                                      <div key={k}>{METRICS_CFG[k]?.name}: <span className={v > 0 ? "text-[#4ade80]" : "text-[#f87171]"}>{v > 0 ? "+" : ""}{v}</span></div>
+                                    ))}
+                                    {a.id === "ask_help" && <div className="text-[#93c5fd]">+5 к случайной метрике соседа</div>}
+                                  </div>
+                                </div>
+                              </div>
                             ))}
                             {!rel.activeProject && (
                               <button
@@ -1041,11 +1266,11 @@ function DecisionPhase({ state, dispatch }) {
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-bold text-[#191c1f]">Решения</h2>
                 <div className="flex gap-0.5">
-                  {Array.from({ length: MAX_PICKS }).map((_, i) => (
+                  {Array.from({ length: maxPicks }).map((_, i) => (
                     <div key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${i < selectedDecisions.length ? "bg-[#4f55f1] scale-110" : "bg-[#e0e0e0]"}`} />
                   ))}
                 </div>
-                <span className="text-[10px] text-[#9ca3af]">{selectedDecisions.length}/{MAX_PICKS}</span>
+                <span className="text-[10px] text-[#9ca3af]">{selectedDecisions.length}/{maxPicks}</span>
               </div>
               <div className="flex items-center gap-2">
                 {totalCost > 0 && (
@@ -1361,7 +1586,7 @@ function ElectionVote({ state, dispatch }) {
             <FadeIn>
               <div className={`text-3xl font-bold mb-4 ${won ? "text-[#00a87e]" : "text-[#e23b4a]"}`}>{won ? "\uD83C\uDF89 Вы переизбраны!" : "\uD83D\uDE14 Вы проиграли"}</div>
               <p className="text-sm text-[#6b7280] mb-6">{won ? "Жители доверили вам ещё 5 лет. Не подведите!" : `Жители выбрали ${opponent.name} новым мэром.`}</p>
-              <button onClick={() => { if (won) dispatch({ type: "START_SECOND_TERM" }); else dispatch({ type: "NEXT_TURN" }); }}
+              <button onClick={() => { if (won) dispatch({ type: "START_SECOND_TERM" }); else dispatch({ type: "SHOW_ELECTION_LOSS" }); }}
                 className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg hover:opacity-90 active:scale-[0.97] transition-all">
                 {won ? "Начать второй срок" : "Посмотреть итоги"}
               </button>

@@ -99,7 +99,7 @@ export function applyDiplomaticAction(relations, neighborId, actionId, rng, metr
   // For "compete" — 60% chance of winning based on metrics
   if (actionId === "compete") {
     const neighbor = NEIGHBORS.find(n => n.id === neighborId);
-    const avgMetric = (metrics.economy || 0 + metrics.infrastructure || 0) / 2;
+    const avgMetric = ((metrics.economy || 0) + (metrics.infrastructure || 0)) / 2;
     const winChance = Math.min(0.8, avgMetric / (neighbor ? neighbor.strength : 50));
     if (rng.next() > winChance) {
       // Lost the competition
