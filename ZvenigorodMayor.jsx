@@ -683,7 +683,7 @@ function DecisionPhase({ state, dispatch }) {
             {/* Tabs: Группы / Рейтинг / Соседи */}
             <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-3">
               <div className="flex gap-1 mb-3">
-                {[["groups","Группы"],["rank","Рейтинг"],["diplomacy","Соседи"]].map(([tab, label]) => (
+                {[["groups","Группы"],["rank","Рейтинг"],["diplomacy","Соседи"],["residents","Жители"]].map(([tab, label]) => (
                   <button key={tab} onClick={() => setSidebarTab(tab)}
                     className={`flex-1 py-1 text-[11px] font-semibold rounded-lg transition-colors ${sidebarTab === tab ? "bg-blue-600 text-white" : "bg-slate-700/60 text-slate-400 hover:text-slate-200"}`}>
                     {label}
@@ -700,6 +700,44 @@ function DecisionPhase({ state, dispatch }) {
               {sidebarTab === "rank" && (
                 <RankingTable zvScore={zvenigorodScore} rankIdx={globalRankIdx} expanded={showRankFull} onToggle={() => setShowRankFull(!showRankFull)} />
               )}
+
+              {sidebarTab === "residents" && (() => {
+                const allNPCs = (state.npcs || []).filter(n => n.status === "resident" || n.status === "moved_in");
+                const sorted = [...allNPCs].sort((a, b) => a.satisfaction - b.satisfaction);
+                const unhappy = sorted.slice(0, 3);
+                const happy = sorted.slice(-3).reverse();
+                const shown = [...unhappy, ...happy].filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i).slice(0, 6);
+                if (shown.length === 0) return <div className="text-xs text-slate-500 text-center py-4">Жители появятся после первого хода</div>;
+                return (
+                  <div className="space-y-1.5">
+                    {shown.map(npc => {
+                      const sat = Math.round(npc.satisfaction);
+                      const happy = sat >= 60;
+                      const sad = sat < 35;
+                      const satColor = happy ? "text-emerald-400" : sad ? "text-red-400" : "text-yellow-400";
+                      const barColor = happy ? "#10b981" : sad ? "#ef4444" : "#f59e0b";
+                      const letter = generateLetterText(npc, metrics);
+                      return (
+                        <div key={npc.id} className="rounded-lg bg-slate-900/50 p-2 text-xs" title={letter ? `«${letter.text}»` : ""}>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span>{happy ? "😊" : sad ? "😠" : "😐"}</span>
+                            <span className="text-slate-200 font-medium flex-1 truncate">{npc.name}</span>
+                            <span className={`font-bold font-mono ${satColor}`}>{sat}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-600 text-[10px] truncate flex-1">{npc.group}</span>
+                            <div className="w-16 h-1 rounded-full bg-white/5 overflow-hidden shrink-0">
+                              <div className="h-full rounded-full" style={{ width: `${sat}%`, backgroundColor: barColor }} />
+                            </div>
+                          </div>
+                          {letter && <p className={`mt-1 text-[10px] italic leading-tight truncate ${happy ? "text-emerald-400/70" : "text-red-400/70"}`}>«{letter.text}»</p>}
+                        </div>
+                      );
+                    })}
+                    <div className="text-[10px] text-slate-600 text-center pt-1">{allNPCs.length} жителей в базе</div>
+                  </div>
+                );
+              })()}
 
               {sidebarTab === "diplomacy" && (
                 <div className="space-y-2">
@@ -840,10 +878,57 @@ function generateNarrative(state) {
   return parts.slice(0, 2).join(" ");
 }
 
+function generateForesight(state) {
+  const hints = [];
+  const { metrics, neighborRelations, achievements, debt, approval, turn, approvalHistory } = state;
+
+  // Crisis warnings
+  for (const k of METRIC_KEYS) {
+    const v = Math.round(metrics[k]);
+    if (v < 25 && v >= 15) hints.push({ icon: "⚠️", type: "danger", text: `${METRICS_CFG[k].name} = ${v} — близко к кризису` });
+  }
+
+  // Debt warning
+  if (debt > 200 && debt < 500) hints.push({ icon: "🏦", type: "danger", text: `Долг ${Math.round(debt)} млн — растёт из-за процентов` });
+
+  // Approval danger
+  if (approval < 30) hints.push({ icon: "📉", type: "danger", text: `Одобрение ${Math.round(approval)}% — риск отзыва мэра` });
+
+  // Neighbor project opportunities
+  if (neighborRelations) {
+    for (const [nid, rel] of Object.entries(neighborRelations)) {
+      if (rel.activeProject) continue;
+      const neighbor = NEIGHBORS.find(n => n.id === nid);
+      if (!neighbor) continue;
+      const available = JOINT_PROJECTS.filter(p => p.partner === nid && rel.relationship >= p.relationshipRequired - 10 && rel.relationship < p.relationshipRequired);
+      if (available.length > 0) {
+        hints.push({ icon: "🤝", type: "opportunity", text: `${neighbor.name}: ещё +${available[0].relationshipRequired - rel.relationship} к отношениям — откроется проект` });
+      }
+    }
+  }
+
+  // Achievement near-miss
+  const NEAR_ACHIEVEMENTS = [
+    { id: "debt_free", check: (s) => s.debt === 0 && !s.achievements.includes("debt_free"), hint: "Нет долга — продержитесь до хода 20 для достижения «Финансист»" },
+    { id: "green_city", check: (s) => s.metrics.ecology >= 75 && s.metrics.ecology < 90, hint: `Экология ${Math.round(metrics.ecology)} — нужно 90 для «Зелёного города»` },
+    { id: "beloved", check: (s) => s.approval >= 75 && s.approval < 90, hint: `Одобрение ${Math.round(approval)}% — нужно 90 для «Народного мэра»` },
+  ];
+  for (const na of NEAR_ACHIEVEMENTS) {
+    if (!achievements.includes(na.id) && na.check(state)) {
+      hints.push({ icon: "🏆", type: "opportunity", text: na.hint });
+    }
+  }
+
+  return hints.slice(0, 3);
+}
+
 function ResultsPhase({ state, dispatch }) {
   const { metrics, prevMetrics, population, prevPopulation, budget, prevBudget, globalRankIdx, satisfactions, prevSatisfactions, turnRevenue, turnExpenses, debt, turn, approval, zvenigorodScore } = state;
   const prevRankIdx = state.history.length >= 2 ? state.history[state.history.length - 2].globalRankIdx : globalRankIdx;
   const [dismissed, setDismissed] = useState(false);
+  const [showChronicle, setShowChronicle] = useState(false);
+  const turnLog = state.turnLog || [];
+  const foresight = generateForesight(state);
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-8">
@@ -895,7 +980,41 @@ function ResultsPhase({ state, dispatch }) {
             <div className="flex items-center gap-2"><span className="text-sm font-bold text-white">{population.toLocaleString("ru-RU")}</span><DeltaValue value={population - prevPopulation} /></div>
           </div>
 
-          {debt > 0 && <div className={`mb-6 p-3 rounded-xl text-center text-sm font-bold ${debt > 500 ? "bg-red-900/30 text-red-300" : "bg-yellow-900/30 text-yellow-300"}`}>Долг: {Math.round(debt)} млн</div>}
+          {debt > 0 && <div className={`mb-4 p-3 rounded-xl text-center text-sm font-bold ${debt > 500 ? "bg-red-900/30 text-red-300" : "bg-yellow-900/30 text-yellow-300"}`}>Долг: {Math.round(debt)} млн</div>}
+
+          {/* Chronicle */}
+          {turnLog.length > 0 && (
+            <div className="mb-4">
+              <button onClick={() => setShowChronicle(!showChronicle)}
+                className="w-full flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider hover:text-slate-200 transition-colors mb-2">
+                <span>📜 Хроника квартала ({turnLog.length})</span>
+                {showChronicle ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              {showChronicle && (
+                <div className="rounded-xl bg-slate-900/50 border border-slate-700/30 p-3 space-y-1.5 max-h-48 overflow-y-auto">
+                  {turnLog.map((entry, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <span className="shrink-0 mt-0.5">{entry.icon}</span>
+                      <span className={`leading-snug ${entry.cat === "crisis" || entry.cat === "protest" ? "text-red-300" : entry.cat === "rank" ? "text-yellow-300" : entry.cat === "npc" ? "text-cyan-300" : entry.cat === "diplomacy" ? "text-blue-300" : "text-slate-300"}`}>{entry.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Foresight */}
+          {foresight.length > 0 && (
+            <div className="mb-6 rounded-xl border border-slate-700/40 bg-slate-900/40 p-3 space-y-2">
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">На следующий квартал</div>
+              {foresight.map((h, i) => (
+                <div key={i} className={`flex items-start gap-2 text-xs rounded-lg px-2 py-1.5 ${h.type === "danger" ? "bg-red-900/20 text-red-300" : "bg-blue-900/20 text-blue-300"}`}>
+                  <span className="shrink-0">{h.icon}</span>
+                  <span className="leading-snug">{h.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <button onClick={() => dispatch({ type: "NEXT_TURN" })}
             className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-lg flex items-center justify-center gap-2">

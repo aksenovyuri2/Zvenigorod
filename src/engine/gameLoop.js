@@ -483,6 +483,39 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   for (const pp of newProjectProblems) news.push(`\u26A0\uFE0F \u041F\u0440\u043E\u0431\u043B\u0435\u043C\u0430 \u043D\u0430 \u0441\u0442\u0440\u043E\u0439\u043A\u0435 \u{00AB}${pp.projectName}\u{00BB}: ${pp.desc || pp.label}`);
   for (const pn of protestNews) news.push(pn);
 
+  // ── 18b. Turn log (structured for Chronicle UI) ──
+  const turnLog = [];
+  for (const id of selectedIds) {
+    const d = ALL_DECISIONS.find(x => x.id === id);
+    if (!d) continue;
+    const parts = Object.entries(d.effects || {}).map(([k, v]) => `${METRIC_KEYS.includes(k) ? k : k} ${v > 0 ? "+" : ""}${Math.round(v)}`).join(", ");
+    turnLog.push({ icon: "📋", cat: "decision", text: `${d.name}${parts ? ` → ${parts}` : ""}` });
+  }
+  if (state.currentEvent) {
+    const evt = state.currentEvent;
+    if (evt.choices && eventChoiceIndex != null) {
+      const choice = evt.choices[eventChoiceIndex];
+      const parts = Object.entries(choice?.effects || {}).filter(([,v]) => v !== 0).map(([k,v]) => `${k} ${v>0?"+":""}${v}`).join(", ");
+      turnLog.push({ icon: "📰", cat: "event", text: `${evt.text.replace(/^[^\s]+\s/, "")} → ${choice?.label}${parts ? ` (${parts})` : ""}` });
+    } else if (!evt.choices) {
+      const parts = Object.entries(evt.effects || {}).filter(([,v]) => v !== 0).map(([k,v]) => `${k} ${v>0?"+":""}${v}`).join(", ");
+      turnLog.push({ icon: "📰", cat: "event", text: `${evt.text.replace(/^[^\s]+\s/, "")}${parts ? ` (${parts})` : ""}` });
+    }
+  }
+  for (const pp of newProjectProblems) turnLog.push({ icon: "⚠️", cat: "project", text: `Стройка «${pp.projectName}»: ${pp.desc || pp.label}` });
+  for (const cp of newCompletedJointProjects) {
+    const parts = Object.entries(cp.effects || {}).filter(([,v]) => v !== 0).map(([k,v]) => `${k} ${v>0?"+":""}${v}`).join(", ");
+    turnLog.push({ icon: "🤝", cat: "diplomacy", text: `Совместный проект «${cp.name}» завершён${parts ? ` → ${parts}` : ""}` });
+  }
+  for (const ha of hostileActions) turnLog.push({ icon: "⚔️", cat: "diplomacy", text: ha.desc });
+  for (const pn of newProtests) turnLog.push({ icon: "📢", cat: "protest", text: pn.name });
+  for (const d of departed) turnLog.push({ icon: "🚶", cat: "npc", text: `${d.npc.name} уехал(а) — недоволен: ${d.reason}` });
+  for (const a of arrived) turnLog.push({ icon: "🏠", cat: "npc", text: `${a.name} переехал(а) в Звенигород` });
+  if (newActiveCrisis && !state.activeCrisis) turnLog.push({ icon: "🚨", cat: "crisis", text: `Начался кризис: ${newActiveCrisis.name}` });
+  if (eventBudget < -30) turnLog.push({ icon: "💸", cat: "finance", text: `Бюджет события: ${eventBudget} млн` });
+  if (newDebt > (state.debt || 0) + 50) turnLog.push({ icon: "🏦", cat: "finance", text: `Долг вырос до ${Math.round(newDebt)} млн` });
+  if (overtakeMsg) turnLog.unshift({ icon: "🏆", cat: "rank", text: overtakeMsg.replace(/^[^\s]+\s/, "") });
+
   // ── 19. Next turn prep ──
   const nextTurn = state.turn + 1;
   let nextEvent = null;
@@ -514,7 +547,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
     satisfactions, defaulted, usedEventIds: newUsedEventIds, lastTurnDecisionIds: selectedIds,
     approval: newApproval, neverHadDebt, negativeStreak, negativeStreakMax, worstRank,
     achievements: [...state.achievements, ...newAchievements], newAchievements,
-    overtakeMsg, news, electionPromise: state.electionPromise, electionResult: state.electionResult,
+    overtakeMsg, news, turnLog, electionPromise: state.electionPromise, electionResult: state.electionResult,
     advisorComments: nextDecisions.length ? generateAdvisorComments(nextDecisions, { ...state, metrics }, rng) : {},
     onboardingStep: state.onboardingStep,
     // v3 config
