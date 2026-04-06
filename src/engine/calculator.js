@@ -1,0 +1,74 @@
+import { METRIC_KEYS, GROUPS, GROUP_KEYS, SEASON_EFFECTS } from "./constants.js";
+
+// Per-metric decay: higher metrics decay faster. decayMult from difficulty (default 1.0)
+export function calcDecay(val) {
+  return Math.max(1, Math.floor(val / 40));
+}
+
+export function applyDecay(metrics, decayMult = 1) {
+  const m = { ...metrics };
+  for (const k of METRIC_KEYS) m[k] = Math.max(0, m[k] - Math.round(calcDecay(m[k]) * decayMult));
+  return m;
+}
+
+export function applySeason(metrics, turn) {
+  const season = turn % 4;
+  const fx = SEASON_EFFECTS[season];
+  const m = { ...metrics };
+  for (const [k, v] of Object.entries(fx)) m[k] = (m[k] || 0) + v;
+  return m;
+}
+
+export function clampMetrics(metrics) {
+  const m = { ...metrics };
+  for (const k of METRIC_KEYS) m[k] = Math.max(0, Math.min(100, Math.round(m[k])));
+  return m;
+}
+
+export function calcSatisfaction(metrics, weights) {
+  let s = 0;
+  for (const [k, w] of Object.entries(weights)) s += (metrics[k] || 0) * w;
+  return Math.round(s * 10) / 10;
+}
+
+export function calcGroupSatisfactions(metrics) {
+  const r = {};
+  for (const [gk, g] of Object.entries(GROUPS)) r[gk] = calcSatisfaction(metrics, g.weights);
+  return r;
+}
+
+export function calcAvgSatisfaction(sats) {
+  const v = Object.values(sats);
+  return v.reduce((a, b) => a + b, 0) / v.length;
+}
+
+export function calcApproval(groupSatisfactions) {
+  return calcAvgSatisfaction(groupSatisfactions);
+}
+
+export function calcApprovalChange(prevMetrics, newMetrics, debt) {
+  const avgOld = METRIC_KEYS.reduce((s, k) => s + prevMetrics[k], 0) / METRIC_KEYS.length;
+  const avgNew = METRIC_KEYS.reduce((s, k) => s + newMetrics[k], 0) / METRIC_KEYS.length;
+  let change = (avgNew - avgOld) * 0.5;
+  if (debt > 200) change -= 3;
+  if (METRIC_KEYS.some(k => newMetrics[k] < 20)) change -= 2;
+  return Math.round(change);
+}
+
+// revenue: base 400 + pop*0.012 + economy*2 + culture*1.2, with optional taxMult
+export function calcRevenue(pop, metrics, taxMult = 1) {
+  return Math.round((400 + pop * 0.012 + metrics.economy * 2.0 + metrics.culture * 1.2) * taxMult);
+}
+
+export function calcMandatoryExpenses(pop) {
+  return Math.round(200 + pop * 0.005);
+}
+
+// migration based on avg satisfaction + rng
+export function calcMigration(avgSat, rng) {
+  let m = 0;
+  if (avgSat > 60) m = (avgSat - 60) * 15 + rng.nextInt(-50, 50);
+  else if (avgSat < 40) m = (avgSat - 40) * 20 + rng.nextInt(-50, 50);
+  else m = rng.nextInt(-100, 100);
+  return Math.round(m);
+}
