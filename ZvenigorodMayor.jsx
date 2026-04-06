@@ -24,7 +24,7 @@ import {
 import { calcRevenue, calcMandatoryExpenses } from "./src/engine/calculator.js";
 import { getCurrentCrisisPhase } from "./src/engine/crises.js";
 import { generateLetterText } from "./src/npc/npcEngine.js";
-import { NEIGHBORS, DIPLOMATIC_ACTIONS } from "./src/political/diplomacy.js";
+import { NEIGHBORS, DIPLOMATIC_ACTIONS, JOINT_PROJECTS } from "./src/political/diplomacy.js";
 
 // Icon mapping: string keys from engine to React components
 const ICON_MAP = {
@@ -450,6 +450,7 @@ function DecisionPhase({ state, dispatch }) {
   const [showGroups, setShowGroups] = useState(false);
   const [showRankFull, setShowRankFull] = useState(false);
   const [sidebarTab, setSidebarTab] = useState("groups");
+  const [projectPickerFor, setProjectPickerFor] = useState(null);
   const avgSat = calcAvgSatisfaction(satisfactions);
   const season = turn % 4;
   const SeasonIcon = SEASON_ICONS[season];
@@ -539,6 +540,53 @@ function DecisionPhase({ state, dispatch }) {
               </div>
             </div>
 
+            {/* Economy panel */}
+            {state.economy && (() => {
+              const econ = state.economy;
+              const RATES = [5, 8, 10, 12, 15];
+              const canChange = state.turn - (econ.lastTaxChangeTurn || -99) >= 4;
+              const taxColor = econ.taxRate <= 8 ? "text-emerald-400" : econ.taxRate >= 12 ? "text-red-400" : "text-yellow-400";
+              return (
+                <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-3">
+                  <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Экономика</h2>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="text-center">
+                      <div className="text-[10px] text-slate-500 mb-0.5">Безработица</div>
+                      <div className={`text-sm font-bold ${econ.unemployment > 15 ? "text-red-400" : econ.unemployment < 8 ? "text-emerald-400" : "text-yellow-400"}`}>{econ.unemployment}%</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-[10px] text-slate-500 mb-0.5">Зарплата</div>
+                      <div className="text-sm font-bold text-white">{(econ.avgSalary/1000).toFixed(0)}к</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-[10px] text-slate-500 mb-0.5">Бизнесов</div>
+                      <div className="text-sm font-bold text-cyan-400">{econ.businessCount}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] text-slate-400">Налог</span>
+                      <span className={`text-xs font-bold ${taxColor}`}>{econ.taxRate}%</span>
+                      {!canChange && <span className="text-[10px] text-slate-600">кд {4 - (state.turn - (econ.lastTaxChangeTurn || -99))} ход.</span>}
+                    </div>
+                    <div className="flex gap-1">
+                      {RATES.map(r => (
+                        <button key={r}
+                          onClick={() => dispatch({ type: "CHANGE_TAX", rate: r })}
+                          disabled={!canChange || r === econ.taxRate}
+                          className={`flex-1 py-1 text-[10px] font-bold rounded transition-colors ${r === econ.taxRate ? "bg-blue-600 text-white" : canChange ? "bg-slate-700 hover:bg-slate-600 text-slate-300" : "bg-slate-800 text-slate-600 cursor-default"}`}>
+                          {r}%
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-600 text-center">
+                      {econ.taxRate < 10 ? "↓ меньше доходов, ↑ экономика" : econ.taxRate > 10 ? "↑ больше доходов, ↓ экономика" : "Стандартная ставка"}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* NPC Letters */}
             {(state.npcLetters || []).length > 0 && (
               <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-3">
@@ -605,6 +653,33 @@ function DecisionPhase({ state, dispatch }) {
               </div>
             )}
 
+            {/* Active crisis widget */}
+            {state.activeCrisis && (() => {
+              const crisis = state.activeCrisis;
+              const phase = getCurrentCrisisPhase(crisis);
+              const CrisisIcon = ICON_MAP[crisis.icon] || AlertTriangle;
+              return (
+                <div className="rounded-xl bg-red-950/40 border border-red-700/50 p-3">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <CrisisIcon size={14} className="text-red-400 shrink-0" />
+                    <span className="text-xs font-bold text-red-300 flex-1 truncate">{crisis.name}</span>
+                    <span className="text-[10px] text-red-500 shrink-0">Фаза {crisis.currentPhase + 1}/{crisis.totalPhases}</span>
+                  </div>
+                  {phase && <p className="text-[11px] text-red-200/80 leading-snug mb-2">{phase.description}</p>}
+                  {phase && Object.keys(phase.autoEffects || {}).length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(phase.autoEffects).map(([k, v]) => (
+                        <span key={k} className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${v < 0 ? "bg-red-900/40 text-red-300" : "bg-emerald-900/40 text-emerald-300"}`}>
+                          {METRICS_CFG[k]?.name} {v > 0 ? "+" : ""}{v}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-2 text-[10px] text-red-400/60">⚠ Решение в конце хода</div>
+                </div>
+              );
+            })()}
+
             {/* Tabs: Группы / Рейтинг / Соседи */}
             <div className="rounded-xl bg-slate-800/50 border border-slate-700/40 p-3">
               <div className="flex gap-1 mb-3">
@@ -634,7 +709,9 @@ function DecisionPhase({ state, dispatch }) {
                     const relColor = rv > 30 ? "text-emerald-400" : rv < -30 ? "text-red-400" : "text-yellow-400";
                     const barWidth = Math.max(0, Math.min(100, (rv + 100) / 2));
                     const barColor = rv > 0 ? "#10b981" : "#ef4444";
-                    const availableActions = DIPLOMATIC_ACTIONS.filter(a => !a.allNeighbors && a.id !== "compete");
+                    const availableActions = DIPLOMATIC_ACTIONS.filter(a => !a.allNeighbors && a.id !== "compete" && a.id !== "joint_project");
+                    const availableProjects = JOINT_PROJECTS.filter(p => p.partner === n.id && rv >= p.relationshipRequired);
+                    const isPicking = projectPickerFor === n.id;
                     return (
                       <div key={n.id} className="rounded-lg bg-slate-900/50 p-2 text-xs">
                         <div className="flex items-center justify-between mb-1">
@@ -644,8 +721,43 @@ function DecisionPhase({ state, dispatch }) {
                         <div className="h-1 rounded-full bg-white/5 overflow-hidden mb-2">
                           <div className="h-full rounded-full transition-all duration-500" style={{ width: `${barWidth}%`, backgroundColor: barColor }} />
                         </div>
+
+                        {/* Active joint project */}
+                        {rel.activeProject && (
+                          <div className="mb-2 space-y-1">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-blue-300 truncate flex-1">🤝 {rel.activeProject.name}</span>
+                              <span className="text-slate-500 ml-1 shrink-0">{rel.activeProject.currentTurn}/{rel.activeProject.totalTurns}</span>
+                            </div>
+                            <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                              <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${Math.round(rel.activeProject.currentTurn / rel.activeProject.totalTurns * 100)}%` }} />
+                            </div>
+                          </div>
+                        )}
+
                         {rel.actionThisTurn ? (
                           <span className="text-slate-500 text-[10px]">Уже действовали этот ход</span>
+                        ) : isPicking ? (
+                          <div className="space-y-1.5">
+                            <div className="text-[10px] text-slate-400 font-semibold">Выберите проект:</div>
+                            {availableProjects.length === 0 && <div className="text-[10px] text-slate-600">Нужно больше доверия</div>}
+                            {availableProjects.map(p => (
+                              <button key={p.id}
+                                disabled={!!rel.activeProject || budget < Math.round(p.totalCost * p.costShare)}
+                                onClick={() => { dispatch({ type: "START_JOINT_PROJECT", neighborId: n.id, projectId: p.id }); setProjectPickerFor(null); }}
+                                className="w-full text-left rounded p-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700/50 transition-colors">
+                                <div className="text-slate-200 mb-0.5 leading-tight">{p.name}</div>
+                                <div className="flex flex-wrap gap-1">
+                                  {Object.entries(p.effects).map(([k, v]) => (
+                                    <span key={k} className={`text-[9px] px-1 rounded ${v > 0 ? "bg-emerald-900/50 text-emerald-400" : "bg-red-900/50 text-red-400"}`}>{METRICS_CFG[k]?.name} {v > 0 ? "+" : ""}{v}</span>
+                                  ))}
+                                  <span className="text-[9px] px-1 rounded bg-yellow-900/50 text-yellow-400">−{Math.round(p.totalCost * p.costShare)} млн</span>
+                                  <span className="text-[9px] px-1 rounded bg-slate-700/50 text-slate-400">{p.duration} хода</span>
+                                </div>
+                              </button>
+                            ))}
+                            <button onClick={() => setProjectPickerFor(null)} className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors">← Назад</button>
+                          </div>
                         ) : (
                           <div className="flex flex-wrap gap-1">
                             {availableActions.map(a => (
@@ -657,6 +769,14 @@ function DecisionPhase({ state, dispatch }) {
                                 {a.name.split(" ").slice(0, 2).join(" ")}
                               </button>
                             ))}
+                            {!rel.activeProject && (
+                              <button
+                                onClick={() => setProjectPickerFor(n.id)}
+                                className="px-1.5 py-0.5 bg-blue-800/60 hover:bg-blue-700/70 text-blue-300 rounded text-[10px] transition-colors"
+                                title="Предложить совместный проект">
+                                🤝 Проект
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

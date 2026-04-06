@@ -17,7 +17,7 @@ import {
   calcRevenue, calcMandatoryExpenses, calcMigration, calcApprovalChange,
 } from "./calculator.js";
 import { calcZvenigorodScore, getZvenigorodRankIdx, getGrade, getPlayStyle } from "./scoring.js";
-import { createInitialEconomy, updateEconomy, getTaxRevenueMultiplier } from "./economyEngine.js";
+import { createInitialEconomy, updateEconomy, getTaxRevenueMultiplier, applyTaxChange, canChangeTax } from "./economyEngine.js";
 import {
   shouldBeProject, generateContractors, createProject, advanceProject,
   getProjectsCostThisTurn, getCompletedProjectEffects,
@@ -27,7 +27,7 @@ import { generateNPCs } from "../npc/npcGenerator.js";
 import { processNPCTurn, selectLetterWriters } from "../npc/npcEngine.js";
 import { generateDeputies, checkImpeachment, checkRecallVote, executeRecallVote } from "../political/dumaEngine.js";
 import { checkProtests, processProtests } from "./protestEngine.js";
-import { initNeighborRelations, checkHostileActions, advanceJointProject, resetTurnFlags, applyDiplomaticAction } from "../political/diplomacy.js";
+import { initNeighborRelations, checkHostileActions, advanceJointProject, resetTurnFlags, applyDiplomaticAction, startJointProject, JOINT_PROJECTS } from "../political/diplomacy.js";
 
 // ── Internal helpers ──
 
@@ -627,6 +627,21 @@ export function gameReducer(state, action) {
         newMetrics[k] = Math.max(0, Math.min(100, (newMetrics[k] || 0) + v));
       }
       return { ...state, neighborRelations: relations, budget: state.budget - (cost || 0), metrics: newMetrics, seed: rng.getSeed() };
+    }
+    case "CHANGE_TAX": {
+      const { rate } = action;
+      if (!canChangeTax(state.economy || {}, state.turn)) return state;
+      return { ...state, economy: applyTaxChange(state.economy || {}, rate, state.turn) };
+    }
+    case "START_JOINT_PROJECT": {
+      const { neighborId, projectId } = action;
+      const proj = JOINT_PROJECTS.find(p => p.id === projectId);
+      if (!proj) return state;
+      const rel = (state.neighborRelations || {})[neighborId];
+      if (!rel || rel.relationship < proj.relationshipRequired) return state;
+      const myCost = Math.round(proj.totalCost * proj.costShare);
+      const newRelations = startJointProject(state.neighborRelations, neighborId, projectId);
+      return { ...state, neighborRelations: newRelations, budget: state.budget - myCost };
     }
     case "ELECTION_LOSS_END":
       return { ...state, phase: "end" };
