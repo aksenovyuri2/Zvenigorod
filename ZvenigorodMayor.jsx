@@ -272,22 +272,27 @@ function OvertakeToast({ msg, onDismiss }) {
 // RANKING TABLE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function RankingTable({ zvScore, rankIdx, expanded, onToggle }) {
+function RankingTable({ zvScore, rankIdx, expanded, onToggle, dynamicCities }) {
+  // Build sorted list from dynamic cities if available, otherwise static
+  const sorted = dynamicCities
+    ? [...dynamicCities].sort((a, b) => b.currentScore - a.currentScore)
+    : WORLD_CITIES;
+  const total = sorted.length;
   const nearby = 3;
   const start = Math.max(0, rankIdx - nearby);
-  const end = Math.min(WORLD_CITIES.length, rankIdx + nearby + 1);
-  const visible = expanded ? WORLD_CITIES : WORLD_CITIES.slice(start, end);
-  const zvEntry = { name: "Звенигород", flag: "🏛️", score: zvScore, icon: "🏛️", tagline: "Ваш город", isPlayer: true };
+  const end = Math.min(total, rankIdx + nearby + 1);
+
+  const zvEntry = { name: "Звенигород", flag: "🏛️", score: zvScore, currentScore: zvScore, trend: null, icon: "🏛️", isPlayer: true };
 
   const allEntries = expanded
-    ? [...WORLD_CITIES.slice(0, rankIdx), zvEntry, ...WORLD_CITIES.slice(rankIdx)]
-    : [...WORLD_CITIES.slice(start, rankIdx), zvEntry, ...WORLD_CITIES.slice(rankIdx, end)];
+    ? [...sorted.slice(0, rankIdx), zvEntry, ...sorted.slice(rankIdx)]
+    : [...sorted.slice(start, rankIdx), zvEntry, ...sorted.slice(rankIdx, end)];
 
   return (
     <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xs font-bold text-[#6b7280] uppercase tracking-wider flex items-center gap-1.5">
-          <Globe size={14} className="text-[#4f55f1]" /> Мировой рейтинг — #{rankIdx + 1} из {WORLD_CITIES.length + 1}
+          <Globe size={14} className="text-[#4f55f1]" /> Мировой рейтинг — #{rankIdx + 1} из {total + 1}
         </h2>
         <button onClick={onToggle} className="text-xs text-[#4f55f1] hover:text-[#4f55f1]">{expanded ? "Свернуть" : "Полный список"}</button>
       </div>
@@ -295,14 +300,21 @@ function RankingTable({ zvScore, rankIdx, expanded, onToggle }) {
         {allEntries.map((city, i) => {
           const pos = expanded ? i + 1 : start + i + 1;
           const isZv = city.isPlayer;
+          const displayScore = city.currentScore ?? city.score;
+          const trend = city.trend;
           return (
             <div key={city.name + i} className={`flex items-center gap-2 px-2 py-1.5 rounded-full text-xs ${isZv ? "bg-[#e8e8e8] border border-[#4f55f1]/30" : "hover:bg-[#f7f7f7]"}`}>
               <span className="text-[#9ca3af] w-6 text-right font-mono">#{pos}</span>
               <span>{city.flag || city.icon}</span>
               <span className={`flex-1 ${isZv ? "text-[#4f55f1] font-bold" : "text-[#191c1f]"}`}>{city.name}</span>
-              <span className="text-[#6b7280] font-mono">{typeof city.score === "number" ? city.score.toFixed(1) : city.score}</span>
-              <div className="w-16 h-1 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.06)" }}>
-                <div className="h-full rounded-full" style={{ width: `${city.score}%`, backgroundColor: isZv ? "#4f55f1" : "#c0c0c0" }} />
+              {trend != null && !isZv && (
+                <span className={`font-mono text-[10px] w-12 text-right ${trend > 0 ? "text-[#16a34a]" : trend < 0 ? "text-[#dc2626]" : "text-[#9ca3af]"}`}>
+                  {trend > 0 ? `▲+${trend.toFixed(1)}` : trend < 0 ? `▼${trend.toFixed(1)}` : "—"}
+                </span>
+              )}
+              <span className="text-[#6b7280] font-mono w-10 text-right">{typeof displayScore === "number" ? displayScore.toFixed(1) : displayScore}</span>
+              <div className="w-12 h-1 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.06)" }}>
+                <div className="h-full rounded-full" style={{ width: `${displayScore}%`, backgroundColor: isZv ? "#4f55f1" : "#c0c0c0" }} />
               </div>
             </div>
           );
@@ -854,8 +866,42 @@ const GEO_DISTRICTS = [
   },
 ];
 
+const BUILD_ICONS = { infrastructure: "🏗️", ecology: "🌿", culture: "🏛️", healthcare: "💊", education: "📚", digital: "📡", safety: "🛡️", economy: "🏪", tradeoff: "⚖️" };
+
+function heatColor(val) {
+  if (val < 30) {
+    const t = val / 30;
+    return `rgb(239,${Math.round(68 + 91 * t)},68)`;
+  } else if (val < 70) {
+    const t = (val - 30) / 40;
+    return `rgb(${Math.round(239 - 205 * t)},${Math.round(159 + 38 * t)},${Math.round(68 + 26 * t)})`;
+  } else {
+    const t = (val - 70) / 30;
+    return `rgb(${Math.round(34 - 13 * t)},${Math.round(197 - 69 * t)},${Math.round(94 + 6 * t)})`;
+  }
+}
+
+function MapDonut({ cx, cy, val, color }) {
+  const r = 5.5;
+  const circ = 2 * Math.PI * r;
+  const dash = (val / 100) * circ;
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      <circle cx={cx} cy={cy} r={r + 1} fill="white" fillOpacity="0.8" />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#ddd" strokeWidth="2" />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth="2"
+        strokeDasharray={`${dash} ${circ}`} strokeDashoffset={circ * 0.25}
+        transform={`rotate(-90 ${cx} ${cy})`} />
+      <text x={cx} y={cy + 1.8} textAnchor="middle" fontSize="3" fontWeight="bold" fill="#333">{Math.round(val)}</text>
+    </g>
+  );
+}
+
 function CityMapModal({ metrics, projects, decisionHistory, onClose }) {
   const [hovered, setHovered] = useState(null);
+  const [viewMode, setViewMode] = useState("overview");
+  const [heatMetric, setHeatMetric] = useState("economy");
+  const [fullscreen, setFullscreen] = useState(false);
 
   const builtItems = useMemo(() => {
     const items = [];
@@ -869,17 +915,58 @@ function CityMapModal({ metrics, projects, decisionHistory, onClose }) {
   const activeProjects = (projects || []).filter(p => p.status === "building");
   const hoveredDistrict = hovered ? GEO_DISTRICTS.find(d => d.id === hovered) : null;
 
+  const wrapperCls = fullscreen
+    ? "fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    : "fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm";
+  const panelCls = fullscreen
+    ? "bg-white w-full h-full overflow-y-auto p-4"
+    : "bg-white rounded-3xl border border-[#e0e0e0] p-4 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-3xl border border-[#e0e0e0] p-4 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className={wrapperCls} onClick={onClose}>
+      <div className={panelCls} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold text-[#191c1f] flex items-center gap-2">
             <Map size={20} className="text-[#4f55f1]" />Карта Звенигорода
           </h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#f0f0f0]"><X size={18} className="text-[#6b7280]" /></button>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setFullscreen(f => !f)}
+              className="p-1.5 rounded-lg hover:bg-[#f0f0f0] text-base leading-none text-[#6b7280]" title="На весь экран">
+              {fullscreen ? "⊡" : "⛶"}
+            </button>
+            <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#f0f0f0]"><X size={18} className="text-[#6b7280]" /></button>
+          </div>
         </div>
 
-        {/* Detailed SVG map */}
+        {/* View mode tabs */}
+        <div className="flex gap-1 mb-3 p-1 bg-[#f7f7f7] rounded-xl border border-[#e0e0e0]">
+          {[["overview","🗺 Обзор"],["heat","🌡 Тепло"],["build","🏗 Застройка"]].map(([mode, label]) => (
+            <button key={mode} onClick={() => setViewMode(mode)}
+              className={`flex-1 text-xs py-1.5 rounded-lg font-semibold transition-all ${viewMode === mode ? "bg-white shadow-sm text-[#4f55f1] border border-[#e0e0e0]" : "text-[#6b7280] hover:text-[#191c1f]"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Heat metric selector */}
+        {viewMode === "heat" && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {METRIC_KEYS.map(k => {
+              const cfg = METRICS_CFG[k];
+              return (
+                <button key={k} onClick={() => setHeatMetric(k)}
+                  className={`text-[10px] px-2 py-1 rounded-full border transition-all ${heatMetric === k ? "border-transparent text-white font-bold shadow-sm" : "border-[#e0e0e0] text-[#6b7280] hover:border-[#aaa]"}`}
+                  style={heatMetric === k ? { backgroundColor: cfg.color } : {}}>
+                  {cfg.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* SVG Map */}
         <div className="relative w-full rounded-2xl overflow-hidden border border-[#e8e0d4]" style={{ paddingBottom: "78%" }}>
           <svg viewBox="0 0 200 155" className="absolute inset-0 w-full h-full">
             <defs>
@@ -891,117 +978,169 @@ function CityMapModal({ metrics, projects, decisionHistory, onClose }) {
                 <stop offset="0%" stopColor="#7ab8e0" />
                 <stop offset="100%" stopColor="#5898c8" />
               </linearGradient>
+              <filter id="d-shadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="1" stdDeviation="2.5" floodColor="#000" floodOpacity="0.22" />
+              </filter>
             </defs>
 
-            {/* Map background — terrain */}
-            <rect width="200" height="155" fill="url(#map-bg)" />
+            {/* Background */}
+            <rect width="200" height="155" fill={viewMode === "heat" ? "#f5f0e8" : "url(#map-bg)"} />
 
-            {/* Forest patches */}
-            {[
-              [14,96,10,7],[22,100,8,5],[8,104,7,5],  // south-west forest
-              [170,10,9,7],[180,14,7,6],[175,20,8,5],  // north-east
-              [52,10,8,6],[60,8,6,5],                   // north forest
-              [190,100,8,5],[195,108,6,4],               // east forest
+            {/* Forests (overview + build only) */}
+            {viewMode !== "heat" && [
+              [14,96,10,7],[22,100,8,5],[8,104,7,5],
+              [170,10,9,7],[180,14,7,6],[175,20,8,5],
+              [52,10,8,6],[60,8,6,5],[190,100,8,5],[195,108,6,4],
             ].map(([cx,cy,rx,ry],i) => (
               <ellipse key={i} cx={cx} cy={cy} rx={rx} ry={ry} fill="#7aae58" opacity="0.55" />
             ))}
 
-            {/* Storozhka river (small, flows into Moskva near monastery) */}
-            <path d="M 4 8 Q 12 16 18 26 Q 22 36 20 48" fill="none" stroke="#7ab8e0" strokeWidth="2.5" opacity="0.6" />
-            {/* Moskva River — main channel flowing east */}
+            {/* Storozhka — animated */}
+            <path d="M 4 8 Q 12 16 18 26 Q 22 36 20 48" fill="none" stroke="#7ab8e0" strokeWidth="2.5">
+              <animate attributeName="stroke-opacity" values="0.5;0.8;0.5" dur="4s" repeatCount="indefinite" />
+            </path>
+
+            {/* Moskva River — animated fill + flowing dash */}
             <path d="M 0 50 Q 18 44 36 50 Q 50 56 52 70 Q 54 84 48 95 Q 44 105 50 118 Q 60 132 90 136 Q 120 138 148 132 Q 170 128 192 134 L 200 136 L 200 155 L 0 155 Z"
-              fill="url(#map-water)" opacity="0.55" />
+              fill="url(#map-water)">
+              <animate attributeName="fill-opacity" values="0.5;0.72;0.5" dur="3.2s" repeatCount="indefinite" />
+            </path>
             <path d="M 0 50 Q 18 44 36 50 Q 50 56 52 70 Q 54 84 48 95 Q 44 105 50 118 Q 60 132 90 136 Q 120 138 148 132 Q 170 128 192 134"
-              fill="none" stroke="#a0d0f0" strokeWidth="1" opacity="0.6" />
-            {/* River label */}
+              fill="none" stroke="#a8d8f8" strokeWidth="2.2" strokeDasharray="5,4">
+              <animate attributeName="stroke-dashoffset" values="0;-18" dur="2s" repeatCount="indefinite" />
+            </path>
             <text x="106" y="143" textAnchor="middle" fontSize="3.5" fill="#3a78b8" opacity="0.8" fontStyle="italic">р. Москва</text>
 
             {/* Roads */}
-            {/* Main road — west to east */}
-            <path d="M 0 68 Q 35 62 68 66 Q 90 68 116 66 Q 148 64 200 68"
-              fill="none" stroke="#c8b888" strokeWidth="1.5" opacity="0.8" />
-            {/* North-south road (monastery to kremlin) */}
-            <path d="M 46 32 Q 58 30 72 36 Q 80 40 82 55 Q 84 68 80 80"
-              fill="none" stroke="#c8b888" strokeWidth="1" opacity="0.7" />
-            {/* Eastern connector */}
-            <path d="M 116 38 Q 134 40 152 46 Q 160 50 162 60"
-              fill="none" stroke="#c8b888" strokeWidth="1" opacity="0.6" />
+            <path d="M 0 68 Q 35 62 68 66 Q 90 68 116 66 Q 148 64 200 68" fill="none" stroke="#c8b888" strokeWidth="1.5" opacity="0.8" />
+            <path d="M 46 32 Q 58 30 72 36 Q 80 40 82 55 Q 84 68 80 80" fill="none" stroke="#c8b888" strokeWidth="1" opacity="0.7" />
+            <path d="M 116 38 Q 134 40 152 46 Q 160 50 162 60" fill="none" stroke="#c8b888" strokeWidth="1" opacity="0.6" />
+
             {/* Railway */}
-            <path d="M 0 108 Q 40 104 80 106 Q 110 107 140 104 Q 165 102 200 106"
-              fill="none" stroke="#888" strokeWidth="2.5" opacity="0.65" />
-            <path d="M 0 108 Q 40 104 80 106 Q 110 107 140 104 Q 165 102 200 106"
-              fill="none" stroke="#b8b0a0" strokeWidth="1" opacity="0.4" strokeDasharray="2,3" />
-            {/* Rail ties */}
+            <path d="M 0 108 Q 40 104 80 106 Q 110 107 140 104 Q 165 102 200 106" fill="none" stroke="#888" strokeWidth="2.5" opacity="0.65" />
+            <path d="M 0 108 Q 40 104 80 106 Q 110 107 140 104 Q 165 102 200 106" fill="none" stroke="#b8b0a0" strokeWidth="1" opacity="0.4" strokeDasharray="2,3" />
             {[10,20,30,42,54,66,78,90,102,114,126,138,150,162,174,186,196].map(x => (
-              <line key={x} x1={x} y1={106 + (x-0)*0.01} x2={x} y2={109 + (x-0)*0.01}
-                stroke="#888" strokeWidth="1.5" opacity="0.4" />
+              <line key={x} x1={x} y1={105.5} x2={x} y2={108.5} stroke="#888" strokeWidth="1.5" opacity="0.4" />
             ))}
-            {/* Railway station icon */}
             <rect x="88" y="100" width="16" height="10" rx="1.5" fill="#d4c898" />
             <polygon points="88,100 96,95 104,100" fill="#c0b480" />
             <text x="96" y="115" textAnchor="middle" fontSize="3" fill="#6b5840" opacity="0.8">Станция</text>
 
-            {/* District polygons */}
+            {/* Districts */}
             {GEO_DISTRICTS.map(d => {
               const val = metrics[d.metric] || 30;
               const cfg = METRICS_CFG[d.metric];
               const isHovered = hovered === d.id;
-              const baseOpacity = 0.18 + (val / 100) * 0.52;
+              const distBuildings = builtItems.filter(b => b.cat === d.metric);
               const hasConstruction = activeProjects.some((_, i) => GEO_DISTRICTS[i % GEO_DISTRICTS.length]?.id === d.id);
+
+              let fillColor, fillOpacity;
+              if (viewMode === "heat") {
+                const isSelected = d.metric === heatMetric;
+                fillColor = heatColor(val);
+                fillOpacity = isSelected ? 0.82 : 0.18;
+              } else {
+                fillColor = cfg?.color || "#888";
+                fillOpacity = isHovered ? Math.min(0.95, 0.2 + (val / 100) * 0.55 + 0.25) : 0.2 + (val / 100) * 0.55;
+              }
+
               return (
                 <g key={d.id}
                   onMouseEnter={() => setHovered(d.id)}
                   onMouseLeave={() => setHovered(null)}
-                  style={{ cursor: "pointer" }}>
+                  style={{ cursor: "pointer" }}
+                  filter={isHovered ? "url(#d-shadow)" : undefined}>
                   <path d={d.path}
-                    fill={cfg?.color || "#888"}
-                    opacity={isHovered ? Math.min(1, baseOpacity + 0.25) : baseOpacity}
-                    stroke={isHovered ? cfg?.color : "#fff"}
-                    strokeWidth={isHovered ? "1.2" : "0.6"}
+                    fill={fillColor}
+                    fillOpacity={fillOpacity}
+                    stroke={isHovered ? fillColor : "#fff"}
+                    strokeWidth={isHovered ? "1.5" : "0.6"}
                     strokeOpacity={isHovered ? "0.9" : "0.5"} />
-                  {/* Emoji label */}
-                  <text x={d.labelX} y={d.labelY - 3.5} textAnchor="middle" fontSize="5" style={{ userSelect: "none" }}>{d.emoji}</text>
-                  {/* Name label (only when hovered or large enough) */}
-                  {isHovered && (
-                    <text x={d.labelX} y={d.labelY + 3} textAnchor="middle" fontSize="3" fill="#191c1f" fontWeight="700" opacity="0.95"
-                      style={{ filter: "drop-shadow(0 0 2px white)" }}>
-                      {d.name}
-                    </text>
+
+                  {/* Overview: emoji + name on hover */}
+                  {viewMode === "overview" && (
+                    <>
+                      <text x={d.labelX} y={d.labelY - 3} textAnchor="middle" fontSize="5" style={{ userSelect: "none" }}>{d.emoji}</text>
+                      {isHovered && (
+                        <text x={d.labelX} y={d.labelY + 4} textAnchor="middle" fontSize="3" fill="#191c1f" fontWeight="700"
+                          style={{ filter: "drop-shadow(0 0 2px white)", userSelect: "none" }}>{d.name}</text>
+                      )}
+                    </>
                   )}
-                  {/* Construction marker */}
+
+                  {/* Heat: mini donut */}
+                  {viewMode === "heat" && (
+                    <MapDonut cx={d.labelX} cy={d.labelY} val={val} color={cfg?.color || "#888"} />
+                  )}
+
+                  {/* Build: building icons or placeholder */}
+                  {viewMode === "build" && (
+                    <>
+                      {distBuildings.length > 0
+                        ? distBuildings.slice(0, 3).map((b, bi) => (
+                            <text key={bi} x={d.labelX + (bi - Math.min(1, distBuildings.length - 1)) * 6.5}
+                              y={d.labelY + 1} textAnchor="middle" fontSize="6" style={{ userSelect: "none" }}>
+                              {BUILD_ICONS[b.cat] || "🏢"}
+                            </text>
+                          ))
+                        : <text x={d.labelX} y={d.labelY + 1} textAnchor="middle" fontSize="5" opacity="0.22" style={{ userSelect: "none" }}>⬜</text>
+                      }
+                      {isHovered && (
+                        <text x={d.labelX} y={d.labelY + 8} textAnchor="middle" fontSize="3" fill="#191c1f" fontWeight="700"
+                          style={{ filter: "drop-shadow(0 0 2px white)", userSelect: "none" }}>{d.name}</text>
+                      )}
+                    </>
+                  )}
+
+                  {/* Construction badge */}
                   {hasConstruction && (
-                    <text x={d.labelX + 6} y={d.labelY - 8} textAnchor="middle" fontSize="5">🚧</text>
+                    <text x={d.labelX + 7} y={d.labelY - 8} textAnchor="middle" fontSize="5" style={{ userSelect: "none" }}>🚧</text>
                   )}
                 </g>
               );
             })}
 
-            {/* Monastery landmark detail */}
-            <g opacity="0.7" style={{ pointerEvents: "none" }}>
-              <rect x="17" y="21" width="18" height="14" rx="1" fill="#ddd4b0" stroke="#b8a880" strokeWidth="0.4" />
-              <path d="M 23 21 Q 26 15 29 21 Z" fill="#507838" />
-              <path d="M 19 21 Q 21 17 23 21 Z" fill="#507838" />
-              <line x1="26" y1="14" x2="26" y2="11" stroke="#c8a850" strokeWidth="0.8" />
-              <line x1="24" y1="12" x2="28" y2="12" stroke="#c8a850" strokeWidth="0.5" />
-            </g>
+            {/* Monastery landmark */}
+            {viewMode !== "build" && (
+              <g opacity="0.75" style={{ pointerEvents: "none" }}>
+                <rect x="17" y="21" width="18" height="14" rx="1" fill="#ddd4b0" stroke="#b8a880" strokeWidth="0.4" />
+                {/* Three domes */}
+                <path d="M 20 21 Q 22 16 24 21 Z" fill="#507838" />
+                <path d="M 24 21 Q 26 14.5 28 21 Z" fill="#507838" />
+                <path d="M 28 21 Q 30 16 32 21 Z" fill="#507838" />
+                {/* Bell tower cross */}
+                <line x1="26" y1="14" x2="26" y2="10" stroke="#c8a850" strokeWidth="0.8" />
+                <line x1="24" y1="11.5" x2="28" y2="11.5" stroke="#c8a850" strokeWidth="0.6" />
+              </g>
+            )}
 
-            {/* Kremlin landmark detail */}
-            <g opacity="0.7" style={{ pointerEvents: "none" }}>
-              <rect x="84" y="29" width="14" height="12" rx="1" fill="#ece4c8" stroke="#c8b898" strokeWidth="0.4" />
-              <path d="M 88 29 Q 91 22 94 29 Z" fill="#507838" />
-              <line x1="91" y1="21" x2="91" y2="18" stroke="#c8a850" strokeWidth="0.8" />
-              <line x1="89.5" y1="19" x2="92.5" y2="19" stroke="#c8a850" strokeWidth="0.5" />
-              <path d="M 85 29 Q 87 24 89 29 Z" fill="#4a7030" opacity="0.8" />
-            </g>
+            {/* Kremlin landmark */}
+            {viewMode !== "build" && (
+              <g opacity="0.75" style={{ pointerEvents: "none" }}>
+                {/* Wall */}
+                <rect x="82" y="32" width="20" height="10" rx="0.5" fill="#ece4c8" stroke="#c8b898" strokeWidth="0.4" />
+                {/* Battlements */}
+                {[83,86,89,92,95,98].map(x => (
+                  <rect key={x} x={x} y="29" width="1.8" height="3" rx="0.3" fill="#d8cca8" />
+                ))}
+                {/* Main cathedral dome */}
+                <path d="M 88 32 Q 92 24 96 32 Z" fill="#507838" />
+                <line x1="92" y1="23" x2="92" y2="20" stroke="#c8a850" strokeWidth="0.8" />
+                <line x1="90.5" y1="21" x2="93.5" y2="21" stroke="#c8a850" strokeWidth="0.6" />
+                {/* Side domes */}
+                <path d="M 85 32 Q 87 27 89 32 Z" fill="#4a7030" opacity="0.85" />
+                <path d="M 95 32 Q 97 27 99 32 Z" fill="#4a7030" opacity="0.85" />
+              </g>
+            )}
 
             {/* Compass rose */}
             <g transform="translate(185,12)" opacity="0.65">
-              <circle cx="0" cy="0" r="6" fill="white" opacity="0.6" />
-              <polygon points="0,-5 1.5,-1.5 0,-2 -1.5,-1.5" fill="#333" />
-              <polygon points="0,5 1.5,1.5 0,2 -1.5,1.5" fill="#888" />
-              <polygon points="-5,0 -1.5,-1.5 -2,0 -1.5,1.5" fill="#888" />
-              <polygon points="5,0 1.5,-1.5 2,0 1.5,1.5" fill="#888" />
-              <text x="0" y="-7" textAnchor="middle" fontSize="3.5" fontWeight="bold" fill="#333">С</text>
+              <circle cx="0" cy="0" r="6.5" fill="white" fillOpacity="0.65" />
+              <polygon points="0,-5.5 1.5,-1.5 0,-2 -1.5,-1.5" fill="#333" />
+              <polygon points="0,5.5 1.5,1.5 0,2 -1.5,1.5" fill="#888" />
+              <polygon points="-5.5,0 -1.5,-1.5 -2,0 -1.5,1.5" fill="#888" />
+              <polygon points="5.5,0 1.5,-1.5 2,0 1.5,1.5" fill="#888" />
+              <text x="0" y="-7.5" textAnchor="middle" fontSize="3.5" fontWeight="bold" fill="#333">С</text>
             </g>
 
             {/* Scale bar */}
@@ -1014,17 +1153,17 @@ function CityMapModal({ metrics, projects, decisionHistory, onClose }) {
           </svg>
         </div>
 
-        {/* District info panel */}
+        {/* District hover info */}
         {hoveredDistrict ? (() => {
           const val = metrics[hoveredDistrict.metric] || 30;
           const cfg = METRICS_CFG[hoveredDistrict.metric];
-          const districtBuilt = builtItems.filter(b => b.cat === hoveredDistrict.metric).slice(0, 4);
+          const districtBuilt = builtItems.filter(b => b.cat === hoveredDistrict.metric).slice(0, 5);
           return (
-            <div className="mt-3 p-3 rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] slide-up">
+            <div className="mt-3 p-3 rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0]">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-bold text-[#191c1f]">{hoveredDistrict.emoji} {hoveredDistrict.name}</span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold"
-                  style={{ backgroundColor: `${cfg?.color}20`, color: cfg?.color }}>
+                  style={{ backgroundColor: `${cfg?.color}22`, color: cfg?.color }}>
                   {cfg?.name}: {Math.round(val)}
                 </span>
               </div>
@@ -1034,11 +1173,13 @@ function CityMapModal({ metrics, projects, decisionHistory, onClose }) {
               {districtBuilt.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
                   {districtBuilt.map(b => (
-                    <span key={b.name} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#e8e8e8] text-[#6b7280]">{b.name} ×{b.count}</span>
+                    <span key={b.name} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#e8e8e8] text-[#6b7280]">
+                      {BUILD_ICONS[b.cat] || "🏢"} {b.name} ×{b.count}
+                    </span>
                   ))}
                 </div>
               ) : (
-                <div className="text-[10px] text-[#9ca3af]">Пока нет построек в этом районе</div>
+                <div className="text-[10px] text-[#9ca3af]">Нет построек в этом районе</div>
               )}
             </div>
           );
@@ -1046,27 +1187,40 @@ function CityMapModal({ metrics, projects, decisionHistory, onClose }) {
           <div className="mt-3 text-center text-xs text-[#9ca3af] py-2">Наведите на район для подробностей</div>
         )}
 
-        {/* Metric legend */}
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5">
-          {METRIC_KEYS.map(k => {
-            const cfg = METRICS_CFG[k];
-            const val = Math.round(metrics[k]);
-            return (
-              <div key={k} className="flex items-center gap-1.5 text-[10px]">
-                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cfg.color, opacity: 0.2 + (val/100)*0.8 }} />
-                <span className="text-[#6b7280]">{cfg.name}</span>
-                <span className="font-bold text-[#191c1f]">{val}</span>
+        {/* Build legend */}
+        {viewMode === "build" && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {Object.entries(BUILD_ICONS).filter(([k]) => k !== "tradeoff").map(([cat, icon]) => (
+              <div key={cat} className="flex items-center gap-1 text-[10px] text-[#6b7280]">
+                <span>{icon}</span><span>{METRICS_CFG[cat]?.name || cat}</span>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
+
+        {/* Metric legend (overview + heat) */}
+        {viewMode !== "build" && (
+          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5">
+            {METRIC_KEYS.map(k => {
+              const cfg = METRICS_CFG[k];
+              const val = Math.round(metrics[k]);
+              return (
+                <div key={k} className="flex items-center gap-1.5 text-[10px]">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cfg.color, opacity: 0.2 + (val / 100) * 0.8 }} />
+                  <span className="text-[#6b7280]">{cfg.name}</span>
+                  <span className="font-bold text-[#191c1f]">{val}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 function DecisionPhase({ state, dispatch }) {
-  const { turn, budget, debt, population, metrics, prevMetrics, selectedDecisions, availableDecisions, globalRankIdx, satisfactions, prevSatisfactions, recurringEffects, costMultiplier, costMultiplierTurns, approval, zvenigorodScore, advisorComments } = state;
+  const { turn, budget, debt, population, metrics, prevMetrics, selectedDecisions, availableDecisions, globalRankIdx, satisfactions, prevSatisfactions, recurringEffects, costMultiplier, costMultiplierTurns, approval, zvenigorodScore, advisorComments, dynamicCities } = state;
   const totalCost = selectedDecisions.reduce((s, id) => { const d = ALL_DECISIONS.find(x => x.id === id); return s + (d ? Math.round(d.cost * (costMultiplier || 1)) : 0); }, 0);
   const revenue = calcRevenue(population, metrics);
   const mandatory = calcMandatoryExpenses(population, metrics);
@@ -1442,7 +1596,7 @@ function DecisionPhase({ state, dispatch }) {
               )}
 
               {sidebarTab === "rank" && (
-                <RankingTable zvScore={zvenigorodScore} rankIdx={globalRankIdx} expanded={showRankFull} onToggle={() => setShowRankFull(!showRankFull)} />
+                <RankingTable zvScore={zvenigorodScore} rankIdx={globalRankIdx} expanded={showRankFull} onToggle={() => setShowRankFull(!showRankFull)} dynamicCities={dynamicCities} />
               )}
 
               {sidebarTab === "rivals" && (

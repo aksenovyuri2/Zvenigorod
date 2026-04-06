@@ -13,10 +13,14 @@ export function calcZvenigorodScore(metrics, pop, sats) {
   return Math.round((avgM * 0.85 + popBonus + divBonus) * 10) / 10;
 }
 
-export function getZvenigorodRankIdx(score) {
-  let idx = WORLD_CITIES.length;
-  for (let i = 0; i < WORLD_CITIES.length; i++) {
-    if (score >= WORLD_CITIES[i].score) { idx = i; break; }
+export function getZvenigorodRankIdx(score, dynamicCities) {
+  const cities = dynamicCities || WORLD_CITIES;
+  const scores = dynamicCities
+    ? [...dynamicCities.map(c => c.currentScore)].sort((a, b) => b - a)
+    : cities.map(c => c.score);
+  let idx = scores.length;
+  for (let i = 0; i < scores.length; i++) {
+    if (score >= scores[i]) { idx = i; break; }
   }
   return idx;
 }

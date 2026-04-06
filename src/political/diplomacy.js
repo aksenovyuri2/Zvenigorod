@@ -73,7 +73,6 @@ export const DIPLOMATIC_ACTIONS = [
   { id: "trade_deal",    name: "Торговое соглашение",         baseCost: 20, relationshipDelta: 5,  effects: { economy: 4 } },
   { id: "ask_help",      name: "Попросить помощь",           baseCost: 0,  relationshipDelta: -10 },
   { id: "compete",       name: "Конкурировать за инвестора", baseCost: 40, relationshipDelta: -15, effects: { economy: 8 } },
-  { id: "summit",        name: "Провести саммит",           baseCost: 30, relationshipDelta: 15,  effects: { culture: 3 }, allNeighbors: true },
 ];
 
 export function initNeighborRelations(rng) {
@@ -96,13 +95,12 @@ export function applyDiplomaticAction(relations, neighborId, actionId, rng, metr
   const effects = { ...(action.effects || {}) };
   let cost = action.baseCost;
 
-  // For "compete" — 60% chance of winning based on metrics
+  // For "compete" — chance of winning based on metrics
   if (actionId === "compete") {
     const neighbor = NEIGHBORS.find(n => n.id === neighborId);
     const avgMetric = ((metrics.economy || 0) + (metrics.infrastructure || 0)) / 2;
     const winChance = Math.min(0.8, avgMetric / (neighbor ? neighbor.strength : 50));
     if (rng.next() > winChance) {
-      // Lost the competition
       return {
         relations: updateRelation(relations, neighborId, action.relationshipDelta),
         effects: {},
@@ -119,15 +117,6 @@ export function applyDiplomaticAction(relations, neighborId, actionId, rng, metr
       const helpMetric = rng.pick(neighbor.interests);
       effects[helpMetric] = (effects[helpMetric] || 0) + 5;
     }
-  }
-
-  // Apply to all neighbors if summit
-  if (action.allNeighbors) {
-    const newRelations = {};
-    for (const [nid, rel] of Object.entries(relations)) {
-      newRelations[nid] = { ...rel, relationship: Math.min(100, rel.relationship + action.relationshipDelta) };
-    }
-    return { relations: newRelations, effects, cost };
   }
 
   return {

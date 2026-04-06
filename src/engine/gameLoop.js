@@ -28,7 +28,7 @@ import { processNPCTurn, selectLetterWriters } from "../npc/npcEngine.js";
 import { generateDeputies, checkImpeachment, checkRecallVote, executeRecallVote } from "../political/dumaEngine.js";
 import { checkProtests, processProtests } from "./protestEngine.js";
 import { initNeighborRelations, checkHostileActions, advanceJointProject, resetTurnFlags, applyDiplomaticAction, startJointProject, JOINT_PROJECTS } from "../political/diplomacy.js";
-import { initRivalCities, processRivalTurn } from "./rivalCities.js";
+import { initRivalCities, processRivalTurn, initDynamicCities, processDynamicCities } from "./rivalCities.js";
 
 // ── Internal helpers ──
 
@@ -85,17 +85,40 @@ export function generateAvailableDecisions(state, rng) {
   const notLast = pool.filter(d => !(lastTurnDecisionIds || []).includes(d.id));
   const preferred = notLast.length >= 6 ? notLast : pool;
 
+  const TARGET = 8;
   const selected = [];
   const usedIds = new Set();
-  const addOne = cands => {
+  const usedCats = new Set();
+
+  const addOne = (cands, label) => {
     const a = cands.filter(d => !usedIds.has(d.id));
-    if (a.length) { const d = rng.pick(a); selected.push(d); usedIds.add(d.id); }
+    if (a.length) { const d = rng.pick(a); selected.push(d); usedIds.add(d.id); usedCats.add(d.cat); }
   };
+
+  // 1. Guarantee: one cheap option
   addOne(cheapOnes.length ? cheapOnes : pool);
+  // 2. Guarantee: one tradeoff
   addOne(tradeoffs.length ? tradeoffs : pool);
+  // 3. Guarantee: one for weakest category
   addOne(weakOnes.length ? weakOnes : pool);
+  // 4. Guarantee: one for 2nd weakest category
+  const metricsSorted = [...METRIC_KEYS].sort((a, b) => (metrics[a] || 0) - (metrics[b] || 0));
+  const secondWeakCat = metricsSorted[1];
+  const secondWeakOnes = pool.filter(d => d.cat === secondWeakCat);
+  addOne(secondWeakOnes.length ? secondWeakOnes : pool);
+
+  // 5-8. Fill remaining with category diversity — prefer unseen categories
+  const allCats = ["infrastructure","digital","ecology","culture","healthcare","education","safety","economy"];
+  const unseenCats = allCats.filter(c => !usedCats.has(c));
+  for (const cat of rng.shuffle(unseenCats)) {
+    if (selected.length >= TARGET) break;
+    const catPool = preferred.filter(d => d.cat === cat && !usedIds.has(d.id));
+    addOne(catPool.length ? catPool : preferred);
+  }
+
+  // Fill any remaining slots
   const rest = rng.shuffle(preferred.filter(d => !usedIds.has(d.id)));
-  for (const d of rest) { if (selected.length >= 6) break; selected.push(d); usedIds.add(d.id); }
+  for (const d of rest) { if (selected.length >= TARGET) break; selected.push(d); usedIds.add(d.id); }
   while (selected.length < 5 && pool.length > selected.length) {
     const rem = pool.filter(d => !usedIds.has(d.id));
     if (!rem.length) break;
@@ -160,7 +183,8 @@ export function createInitialState(seed, scenarioId = "standard", difficultyId =
 
   const satisfactions = calcGroupSatisfactions(metrics);
   const zvScore = calcZvenigorodScore(metrics, INIT_POP, satisfactions);
-  const globalRankIdx = getZvenigorodRankIdx(zvScore);
+  const dynamicCities = initDynamicCities(rng, WORLD_CITIES);
+  const globalRankIdx = getZvenigorodRankIdx(zvScore, dynamicCities);
 
   const decisions = generateAvailableDecisions({
     metrics, budget, usedOnceDecisions: [], lastTurnDecisionIds: [],
@@ -197,6 +221,7 @@ export function createInitialState(seed, scenarioId = "standard", difficultyId =
     projects: [], projectProblems: [], pendingContractorChoice: null,
     // v3 Rival cities
     rivalCities: initRivalCities(rng), rivalNews: [],
+    dynamicCities,
     // v3 Protests & Exile
     activeProtests: [], approvalHistory: [], exiled: false, resolvedProtests: 0,
     // v3 Crises
@@ -434,11 +459,12 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   population = Math.max(1000, population);
 
   const zvScore = calcZvenigorodScore(metrics, population, satisfactions);
-  const globalRankIdx = getZvenigorodRankIdx(zvScore);
 
-  // ── 12b. Rival cities ──
+  // ── 12b. Rival cities + dynamic global ranking ──
   const updatedRivals = processRivalTurn(state.rivalCities || [], rng, zvScore);
   const rivalNews = updatedRivals.filter(c => c.lastEvent).map(c => c.lastEvent);
+  const { cities: updatedDynamic, globalEvent } = processDynamicCities(state.dynamicCities || initDynamicCities(rng, WORLD_CITIES), rng, zvScore);
+  const globalRankIdx = getZvenigorodRankIdx(zvScore, updatedDynamic);
 
   // ── 13. NPC processing ──
   const { updatedNPCs, departed, arrived } = processNPCTurn(state.npcs || [], metrics, state.turn + 1, rng, state.approval + approvalDelta);
@@ -494,6 +520,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   for (const cp of newCompletedJointProjects) news.push(`\u0421\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u044B\u0439 \u043F\u0440\u043E\u0435\u043A\u0442 \u{00AB}${cp.name}\u{00BB} \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D!`);
   for (const pp of newProjectProblems) news.push(`\u26A0\uFE0F \u041F\u0440\u043E\u0431\u043B\u0435\u043C\u0430 \u043D\u0430 \u0441\u0442\u0440\u043E\u0439\u043A\u0435 \u{00AB}${pp.projectName}\u{00BB}: ${pp.desc || pp.label}`);
   for (const pn of protestNews) news.push(pn);
+  if (globalEvent) news.push(`🌍 ${globalEvent.text}`);
 
   // ── 18b. Turn log (structured for Chronicle UI) ──
   const turnLog = [];
@@ -574,6 +601,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
     activeProtests: newActiveProtests, approvalHistory, exiled, resolvedProtests: newResolvedProtests,
     seasonCostMod, respondedLetters: [],
     rivalCities: updatedRivals, rivalNews,
+    dynamicCities: updatedDynamic,
   };
 }
 
