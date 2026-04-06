@@ -27,6 +27,10 @@ import { getCurrentCrisisPhase } from "./src/engine/crises.js";
 import { generateLetterText } from "./src/npc/npcEngine.js";
 import { NEIGHBORS, DIPLOMATIC_ACTIONS, JOINT_PROJECTS } from "./src/political/diplomacy.js";
 import { FACTIONS } from "./src/political/dumaEngine.js";
+import { getResultNarrative } from "./src/engine/scoring.js";
+import { getDailySeed } from "./src/engine/random.js";
+import { getLegacyState, addLegacyPoints, unlockLegacy, applyLegacyBonuses, LEGACY_TREE, isFirstRun } from "./src/engine/legacy.js";
+import { audio } from "./src/audio/audioEngine.js";
 
 // Icon mapping: string keys from engine to React components
 const ICON_MAP = {
@@ -233,6 +237,9 @@ function NewsBar({ news }) {
 }
 
 function AchievementToast({ achievements }) {
+  useEffect(() => {
+    if (achievements && achievements.length > 0) audio.achievement();
+  }, [achievements]);
   if (!achievements || !achievements.length) return null;
   return (
     <div className="fixed top-4 right-4 z-50 space-y-2">
@@ -241,7 +248,7 @@ function AchievementToast({ achievements }) {
         if (!a) return null;
         return (
           <FadeIn key={id}>
-            <div className="px-4 py-3 rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0]">
+            <div className="px-4 py-3 rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] shadow-lg">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">{a.icon}</span>
                 <div><div className="text-xs text-[#ec7e00] font-bold">Достижение!</div><div className="text-sm text-[#191c1f] font-medium">{a.name}</div></div>
@@ -489,6 +496,126 @@ function ZvenigorodPanorama() {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DAILY CHALLENGE HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function getDailyKey() {
+  const d = new Date();
+  return `zvenigorod_daily_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function getDailyResult() {
+  try { return JSON.parse(localStorage.getItem(getDailyKey()) || "null"); } catch { return null; }
+}
+
+function saveDailyResult(score, grade, playStyle) {
+  try { localStorage.setItem(getDailyKey(), JSON.stringify({ score, grade, playStyle, ts: Date.now() })); } catch {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RESULT CARD (shareable)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function shareResultCard(grade, rankIdx, population, playStyle, achievements, narrative) {
+  const text = [
+    `🏙️ Звенигород — ${grade.label}`,
+    `Оценка: ${grade.letter} | Рейтинг: #${rankIdx + 1} из ${WORLD_CITIES.length + 1}`,
+    `Население: ${population.toLocaleString("ru-RU")} | Стиль: ${playStyle}`,
+    achievements.length > 0 ? `Достижения: ${achievements.slice(0, 3).join(", ")}` : "",
+    narrative,
+    "Играй на zvenigorod.netlify.app",
+  ].filter(Boolean).join("\n");
+
+  if (navigator.share) {
+    navigator.share({ title: "Звенигород", text }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(text).then(() => {}).catch(() => {});
+  }
+}
+
+function ResultCard({ grade, rankIdx, population, playStyle, achievements, narrative, onClose }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = () => {
+    const achievementNames = achievements.slice(0, 3).map(id => {
+      const a = ACHIEVEMENTS.find(x => x.id === id);
+      return a ? `${a.icon} ${a.name}` : id;
+    });
+    shareResultCard(grade, rankIdx, population, playStyle, achievementNames, narrative);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        {/* The card itself */}
+        <div className="rounded-3xl overflow-hidden shadow-2xl mb-3" style={{ background: "linear-gradient(135deg, #1a1410 0%, #2d2420 50%, #1a1410 100%)" }}>
+          <div className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <div className="text-xs font-bold text-[#c8b898] tracking-widest uppercase mb-1">Звенигород · Симулятор Мэра</div>
+                <div className="text-5xl font-bold" style={{ color: grade.color }}>{grade.letter}</div>
+                <div className="text-base font-semibold text-white mt-1">{grade.label}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-[#c8b898]">Мировой рейтинг</div>
+                <div className="text-2xl font-bold text-white">#{rankIdx + 1}</div>
+                <div className="text-xs text-[#c8b898]">из {WORLD_CITIES.length + 1}</div>
+              </div>
+            </div>
+
+            <div className="border-t border-white/10 pt-4 mb-4">
+              <div className="text-xs text-[#c8b898] mb-2 italic leading-snug">{narrative}</div>
+            </div>
+
+            <div className="flex gap-4 text-sm">
+              <div>
+                <div className="text-[#c8b898] text-xs">Население</div>
+                <div className="text-white font-semibold">{population.toLocaleString("ru-RU")}</div>
+              </div>
+              <div>
+                <div className="text-[#c8b898] text-xs">Стиль</div>
+                <div className="text-white font-semibold">{playStyle}</div>
+              </div>
+              {achievements.length > 0 && (
+                <div>
+                  <div className="text-[#c8b898] text-xs">Достижения</div>
+                  <div className="text-white font-semibold">{achievements.length}</div>
+                </div>
+              )}
+            </div>
+
+            {achievements.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {achievements.slice(0, 3).map(id => {
+                  const a = ACHIEVEMENTS.find(x => x.id === id);
+                  return a ? <span key={id} className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white">{a.icon} {a.name}</span> : null;
+                })}
+              </div>
+            )}
+          </div>
+          <div className="px-6 py-3 bg-white/5 text-center text-xs text-[#c8b898]">zvenigorod.netlify.app</div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2">
+          <button onClick={handleShare}
+            className="flex-1 py-3 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2"
+            style={{ backgroundColor: grade.color, color: "#fff" }}>
+            {copied ? "✓ Скопировано!" : (navigator.share ? "Поделиться" : "Скопировать")}
+          </button>
+          <button onClick={onClose}
+            className="px-4 py-3 rounded-2xl border border-white/20 text-white text-sm font-medium bg-white/10 backdrop-blur-sm transition-all hover:bg-white/20">
+            ✕
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ONBOARDING_STEPS = ["welcome", "scenario", "difficulty"];
 const DIFFICULTY_DESCS = {
   easy: "Больше бюджета, 3 решения за ход. Идеально для первого запуска.",
@@ -502,6 +629,15 @@ function StartScreen({ onStart }) {
   const [scenarioId, setScenarioId] = useState("standard");
   const [difficultyId, setDifficultyId] = useState("normal");
   const [leaving, setLeaving] = useState(false);
+  const dailyResult = getDailyResult();
+  const todayStr = (() => { const d = new Date(); return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`; })();
+  const [legacy, setLegacy] = useState(() => getLegacyState());
+  const [showLegacy, setShowLegacy] = useState(false);
+
+  const handleUnlock = (id) => {
+    unlockLegacy(id);
+    setLegacy(getLegacyState());
+  };
 
   const goNext = () => {
     setLeaving(true);
@@ -560,6 +696,80 @@ function StartScreen({ onStart }) {
             <div className="flex items-center gap-5 mb-5 justify-center text-xs text-[#8a7858]">
               <span>👥 25 000</span><span>💰 850 млн</span><span>📅 40 ходов</span>
             </div>
+
+            {/* Daily Challenge banner */}
+            <div className="rounded-2xl border border-[#e8dcc8] bg-white/70 backdrop-blur-sm p-4 mb-5 text-left">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">📅</span>
+                  <div>
+                    <div className="text-xs font-bold text-[#1a1410]">Ежедневный вызов</div>
+                    <div className="text-[10px] text-[#8a7858]">{todayStr} · одна seed для всех</div>
+                  </div>
+                </div>
+                {dailyResult && (
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#4f55f1]/10 text-[#4f55f1]">
+                    {dailyResult.grade} выполнен
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-[#6b5840] mb-2">
+                {dailyResult
+                  ? "Вы уже сыграли сегодня. Сыграйте снова — результат обновится."
+                  : "Сегодня все игроки управляют одним и тем же Звенигородом. Сравни свой результат!"}
+              </div>
+              <button onClick={() => onStart("standard", "normal", getDailySeed())}
+                className="text-xs font-bold text-[#4f55f1] hover:underline flex items-center gap-1">
+                ⚡ {dailyResult ? "Переиграть вызов дня" : "Играть вызов дня"}
+              </button>
+            </div>
+
+            {/* Legacy / meta-progression */}
+            {legacy.runs > 0 && (
+              <div className="rounded-2xl border border-[#e8dcc8] bg-white/70 backdrop-blur-sm mb-5 overflow-hidden w-full max-w-lg">
+                <button onClick={() => setShowLegacy(s => !s)}
+                  className="w-full flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🏛️</span>
+                    <div className="text-left">
+                      <div className="text-xs font-bold text-[#1a1410]">Наследие мэра</div>
+                      <div className="text-[10px] text-[#8a7858]">{legacy.points} очков · {legacy.runs} ранов</div>
+                    </div>
+                  </div>
+                  {showLegacy ? <ChevronUp size={14} className="text-[#8a7858]" /> : <ChevronDown size={14} className="text-[#8a7858]" />}
+                </button>
+                {showLegacy && (
+                  <div className="px-4 pb-4 border-t border-[#e8dcc8]">
+                    <div className="text-[10px] text-[#8a7858] mt-3 mb-2">Разблокируй постоянные бонусы для всех ранов</div>
+                    <div className="space-y-2">
+                      {LEGACY_TREE.map(item => {
+                        const owned = legacy.unlocked.includes(item.id);
+                        const canAfford = legacy.points >= item.cost;
+                        return (
+                          <div key={item.id} className={`flex items-center justify-between rounded-xl px-3 py-2 ${owned ? "bg-[#4f55f1]/8 border border-[#4f55f1]/20" : "bg-[#f7f4ef]"}`}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-base shrink-0">{item.icon}</span>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-[#1a1410] truncate">{item.name}</div>
+                                <div className="text-[10px] text-[#8a7858] truncate">{item.desc}</div>
+                              </div>
+                            </div>
+                            {owned ? (
+                              <span className="text-[10px] font-bold text-[#4f55f1] shrink-0 ml-2">✓ Куплено</span>
+                            ) : (
+                              <button onClick={() => handleUnlock(item.id)} disabled={!canAfford}
+                                className={`text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ml-2 transition-colors ${canAfford ? "bg-[#1a1410] text-white hover:opacity-80" : "bg-[#e8dcc8] text-[#8a7858] cursor-not-allowed"}`}>
+                                {item.cost}оч
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <button onClick={goNext} className="inline-flex items-center gap-2.5 px-8 py-3.5 bg-[#1a1410] text-white font-semibold rounded-full hover:opacity-90 active:scale-[0.97] transition-all text-sm">
               Начать путь <ArrowRight size={16} />
@@ -644,6 +854,7 @@ function StartScreen({ onStart }) {
 
 function CrisisPhase({ state, dispatch }) {
   const crisis = state.activeCrisis;
+  useEffect(() => { if (crisis) audio.crisis(); }, [crisis?.id]);
   if (!crisis) return null;
   const phase = getCurrentCrisisPhase(crisis);
   if (!phase) return null;
@@ -809,6 +1020,7 @@ function DecisionPhase({ state, dispatch }) {
   }, [availableDecisions, selectedDecisions, isProcessing]);
   const submitTurn = useCallback(() => {
     setIsProcessing(true);
+    audio.turnEnd();
     setTimeout(() => {
       if (state.eventChoiceIndex != null) dispatch({ type: "SUBMIT_WITH_EVENT" });
       else dispatch({ type: "SUBMIT_DECISIONS" });
@@ -1422,7 +1634,7 @@ function DecisionPhase({ state, dispatch }) {
                   const selected = selectedDecisions.includes(d.id);
                   const otherCost = totalCost - (selected ? cost : 0);
                   const affordable = (budget - otherCost - cost) >= -50;
-                  return <DecisionCard key={d.id} decision={d} selected={selected} affordable={affordable||selected} onToggle={id => dispatch({ type: "SELECT_DECISION", id })} usageCount={state.decisionHistory[d.id]||0} costMultiplier={costMultiplier||1} advisorComment={(advisorComments||{})[d.id]} index={i} metrics={metrics} onHover={setHoveredDecision} />;
+                  return <DecisionCard key={d.id} decision={d} selected={selected} affordable={affordable||selected} onToggle={id => { audio.decision(); dispatch({ type: "SELECT_DECISION", id }); }} usageCount={state.decisionHistory[d.id]||0} costMultiplier={costMultiplier||1} advisorComment={(advisorComments||{})[d.id]} index={i} metrics={metrics} onHover={setHoveredDecision} />;
                 })}
               </div>
             </div>
@@ -1857,12 +2069,38 @@ function EndScreen({ state, onRestart, onRestartFresh }) {
   const rankData = history.map(h => ({ turn:`К${h.turn}`, rank: h.globalRankIdx + 1 }));
   const popData = history.map(h => ({ turn:`К${h.turn}`, pop: h.population }));
   const playStyle = getPlayStyle(history);
+  const [showCard, setShowCard] = useState(false);
+  const [legacyEarned, setLegacyEarned] = useState(null);
+
+  const narrative = state.defaulted
+    ? "Бюджет Звенигорода не выдержал. В следующий раз попробуйте снизить налоги для роста экономики."
+    : getResultNarrative(grade.letter, playStyle, state.achievements);
+
+  // Save daily result + legacy points once + play end audio
+  useEffect(() => {
+    const zvScore = state.zvenigorodScore || 0;
+    saveDailyResult(zvScore, grade.letter, playStyle);
+    const earned = addLegacyPoints(zvScore, grade.letter);
+    setLegacyEarned(earned);
+    audio.gameEnd(grade.letter);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const bestMetric = METRIC_KEYS.reduce((b, k) => { const d = state.metrics[k] - INIT_METRICS[k]; return d > b.delta ? { key: k, delta: d } : b; }, { key: "", delta: -Infinity });
   const worstMetric = METRIC_KEYS.reduce((w, k) => { const d = state.metrics[k] - INIT_METRICS[k]; return d < w.delta ? { key: k, delta: d } : w; }, { key: "", delta: Infinity });
 
   return (
     <div className="min-h-screen px-4 py-8 md:py-12">
+      {showCard && (
+        <ResultCard
+          grade={grade}
+          rankIdx={state.globalRankIdx}
+          population={state.population}
+          playStyle={playStyle}
+          achievements={state.achievements}
+          narrative={narrative}
+          onClose={() => setShowCard(false)}
+        />
+      )}
       <FadeIn className="max-w-3xl mx-auto">
         <div className="text-center rounded-3xl bg-[#f7f7f7] border border-[#e0e0e0] p-8 mb-6">
           {state.defaulted && <div className="mb-4 px-4 py-2 inline-block rounded-full bg-[#e23b4a]/10 text-[#e23b4a] text-sm font-bold shake">💸 Дефолт! Город обанкротился.</div>}
@@ -1873,16 +2111,24 @@ function EndScreen({ state, onRestart, onRestartFresh }) {
           <div className="text-[#9ca3af] text-sm mt-1">Население: {state.population.toLocaleString("ru-RU")} | Стиль: {playStyle}</div>
 
           {/* Narrative summary */}
-          <div className="mt-4 text-sm text-[#6b7280] leading-relaxed max-w-lg mx-auto">
-            {state.defaulted
-              ? "Бюджет Звенигорода не выдержал. В следующий раз попробуйте снизить налоги для роста экономики или выбрать менее затратные проекты."
-              : state.globalRankIdx < 15
-              ? `Выдающийся результат! Звенигород стал одним из лучших городов мира. Ваш стиль «${playStyle}» вошёл в историю.`
-              : state.globalRankIdx < 50
-              ? `Хорошее правление! Звенигород вырос и окреп. Попробуйте другой сценарий, чтобы войти в топ-15.`
-              : `Город пережил ваше правление, но потенциал не раскрыт. Сбалансируйте метрики и следите за бюджетом — и рейтинг пойдёт вверх.`
-            }
+          <div className="mt-4 text-sm text-[#6b7280] leading-relaxed max-w-lg mx-auto italic">
+            {narrative}
           </div>
+
+          {/* Share button */}
+          <button onClick={() => setShowCard(true)}
+            className="mt-5 inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm text-white transition-all hover:opacity-90 active:scale-[0.97]"
+            style={{ backgroundColor: grade.color }}>
+            <Sparkles size={15} /> Поделиться результатом
+          </button>
+
+          {/* Legacy points earned */}
+          {legacyEarned !== null && legacyEarned > 0 && (
+            <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#4f55f1]/10 border border-[#4f55f1]/20 pop-in">
+              <span className="text-sm">🏛️</span>
+              <span className="text-sm font-semibold text-[#4f55f1]">+{legacyEarned} очков наследия</span>
+            </div>
+          )}
         </div>
 
         {/* Achievements */}
@@ -1971,7 +2217,16 @@ function EndScreen({ state, onRestart, onRestartFresh }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function ZvenigorodMayorSim() {
-  const [state, dispatch] = useReducer(gameReducer, Date.now(), createInitialState);
+  const legacyReducer = useCallback((state, action) => {
+    const next = gameReducer(state, action);
+    if (action.type === "START_GAME") {
+      const ls = getLegacyState();
+      return applyLegacyBonuses(next, ls);
+    }
+    return next;
+  }, []);
+
+  const [state, dispatch] = useReducer(legacyReducer, Date.now(), createInitialState);
 
   return (
     <div className="min-h-screen bg-white text-[#191c1f] selection:bg-[#4f55f1]/30" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }}>
@@ -2006,7 +2261,7 @@ export default function ZvenigorodMayorSim() {
         @keyframes ob-fade-in { 0% { opacity:0; transform:translateY(14px); } 100% { opacity:1; transform:translateY(0); } }
         .ob-step { animation: ob-fade-in 0.28s ease-out; }
       `}</style>
-      {state.phase === "start" && <StartScreen onStart={(scenarioId, difficultyId) => dispatch({ type: "START_GAME", seed: Date.now(), scenarioId, difficultyId })} />}
+      {state.phase === "start" && <StartScreen onStart={(scenarioId, difficultyId, seed) => dispatch({ type: "START_GAME", seed: seed || Date.now(), scenarioId, difficultyId })} />}
       {state.phase === "crisis" && <CrisisPhase state={state} dispatch={dispatch} />}
       {state.phase === "event" && <EventPhase event={state.currentEvent} onContinue={() => dispatch({ type: "CONTINUE_EVENT" })} onChoice={(i) => dispatch({ type: "CHOOSE_EVENT", index: i })} />}
       {state.phase === "decisions" && <DecisionPhase state={state} dispatch={dispatch} />}

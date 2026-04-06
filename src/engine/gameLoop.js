@@ -488,7 +488,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   const negativeStreakMax = Math.max(state.negativeStreakMax || 0, negativeStreak);
   const worstRank = Math.max(state.worstRank || 0, globalRankIdx);
 
-  const achState = { metrics, population, approval: newApproval, neverHadDebt, globalRankIdx, turn: state.turn + 1, zvenigorodScore: zvScore, worstRank, negativeStreakMax, achievements: state.achievements, debt: newDebt };
+  const achState = { metrics, population, approval: newApproval, neverHadDebt, globalRankIdx, turn: state.turn + 1, zvenigorodScore: zvScore, worstRank, negativeStreakMax, achievements: state.achievements, debt: newDebt, satisfactions, corruptionEvents: state.corruptionEvents || [], neighborRelations: state.neighborRelations || {}, activeProtests: newActiveProtests || [], resolvedCrises: newResolvedCrises || [], approvalHistory: [...(state.approvalHistory || []), state.approval], history: state.history || [] };
   const newAchievements = checkAchievements(achState);
 
   // ── 17. Rank overtake ──

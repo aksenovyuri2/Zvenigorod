@@ -51,6 +51,11 @@ export const SCENARIOS = [
   { id: "golden",      name: "Золотой наследник", desc: "Предыдущий мэр оставил запас",            metricsModifier: {}, budgetModifier: 650, debtModifier: 0, approvalModifier: -25 },
   { id: "eco_mandate", name: "Эко-мандат",        desc: "Избран на волне эко-протестов",            metricsModifier: { ecology: 20, economy: -10 }, budgetModifier: 0, debtModifier: 0, approvalModifier: 0, promise: { metric: "ecology", min: 60, penalty: -15 } },
   { id: "digital_dream", name: "Цифровая мечта", desc: "Город получил грант на цифровизацию",     metricsModifier: { digital: 15 }, budgetModifier: 200, debtModifier: 0, approvalModifier: 0, digitalOnly: true },
+  { id: "tourist_mecca", name: "Туристическая Мекка", desc: "Хлынул поток туристов — инфраструктура не готова", metricsModifier: { culture: 20, infrastructure: -15, economy: 10 }, budgetModifier: 100, debtModifier: 0, approvalModifier: 5 },
+  { id: "science_city",  name: "Наукоград",          desc: "ИТ-компании хотят прийти — нужно образование и digital", metricsModifier: { education: 15, digital: 10, economy: -10 }, budgetModifier: 50, debtModifier: 0, approvalModifier: -5 },
+  { id: "soviet_legacy", name: "Советское наследие", desc: "Постсоветский упадок: долги, но высокое доверие", metricsModifier: { _all: -15, safety: 5 }, budgetModifier: -400, debtModifier: 500, approvalModifier: 15 },
+  { id: "moscow_suburb", name: "Пригород Москвы",    desc: "Москва давит: жители уезжают, нужно удержать людей", metricsModifier: { economy: -15, infrastructure: 10 }, budgetModifier: 0, debtModifier: 0, approvalModifier: -10, annexRisk: true },
+  { id: "young_city",    name: "Молодой город",      desc: "Высокая доля молодёжи, мало пожилых, быстрый рост", metricsModifier: { digital: 10, culture: 10, healthcare: -10 }, budgetModifier: 0, debtModifier: 0, approvalModifier: 5, youthBonus: true },
 ];
 
 // Districts of Zvenigorod

@@ -196,6 +196,38 @@ export const ACHIEVEMENTS = [
   { id:"healer", name:"Целитель", cond:(s)=>s.metrics.healthcare>=85, icon:"🏥" },
   { id:"educator", name:"Просветитель", cond:(s)=>s.metrics.education>=85, icon:"📚" },
   { id:"marathon", name:"Марафонец", cond:(s)=>s.turn>=40, icon:"🏁" },
+  // New achievements
+  { id:"first_million", name:"Первый миллион", cond:(s)=>s.population>=100000, icon:"🎆" },
+  { id:"winter_mayor", name:"Зимний мэр", cond:(s)=>{
+    const h=s.history||[];
+    const winters=h.filter(t=>t.turn>0&&(t.turn%4)===1);
+    return winters.length>=2&&winters.every(t=>(t.metrics?.infrastructure||0)>=40);
+  }, icon:"❄️" },
+  { id:"grand_diplomat", name:"Дипломатический гений", cond:(s)=>{
+    const r=s.neighborRelations||{};
+    return Object.values(r).filter(v=>v.relationship>=70).length>=5;
+  }, icon:"🌐" },
+  { id:"clean_hands", name:"Чистые руки", cond:(s)=>(s.corruptionEvents||[]).length===0&&s.turn>=20, icon:"🤍" },
+  { id:"populist", name:"Популист", cond:(s)=>{
+    const sats=s.satisfactions||{};
+    return Object.values(sats).every(v=>v>=65);
+  }, icon:"📣" },
+  { id:"crisis_manager", name:"Кризис-менеджер", cond:(s)=>(s.resolvedCrises||[]).length>=3, icon:"🚨" },
+  { id:"tight_spread", name:"Мастер баланса", cond:(s)=>{
+    const vals=METRIC_KEYS.map(k=>s.metrics[k]);
+    return Math.max(...vals)-Math.min(...vals)<15&&s.turn>=20;
+  }, icon:"🎯" },
+  { id:"eco_tech", name:"ЭкоТех", cond:(s)=>s.metrics.ecology>=80&&s.metrics.digital>=80, icon:"🌱" },
+  { id:"culture_boom", name:"Культурный взрыв", cond:(s)=>s.metrics.culture>=85, icon:"🎭" },
+  { id:"no_protests", name:"Тишина на улицах", cond:(s)=>(s.activeProtests||[]).length===0&&s.turn>=30, icon:"🕊️" },
+  { id:"budget_hero", name:"Богатый город", cond:(s)=>s.budget>=1500, icon:"💎" },
+  { id:"comeback_king", name:"Феникс", cond:(s)=>s.globalRankIdx<10&&s.worstRank>50, icon:"🦅" },
+  { id:"all_groups", name:"Народное единство", cond:(s)=>{
+    const sats=s.satisfactions||{};
+    return Object.values(sats).every(v=>v>=75);
+  }, icon:"🤝" },
+  { id:"speed_demon", name:"Быстрый мэр", cond:(s)=>s.turn<=15&&s.globalRankIdx<20, icon:"💨" },
+  { id:"top3_world", name:"Тройка лучших", cond:(s)=>s.globalRankIdx<3, icon:"🥉" },
 ];
 
 export const ELECTION_PROMISES = [

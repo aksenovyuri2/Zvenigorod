@@ -1,3 +1,14 @@
+export function getDailySeed(date) {
+  const d = date || new Date();
+  const str = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash) || 42;
+}
+
 export function createRNG(seed) {
   let s = seed % 2147483647;
   if (s <= 0) s += 2147483646;
