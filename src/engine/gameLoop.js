@@ -393,7 +393,8 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   budget += recurringTotal + (newRecurring.budget || 0);
 
   // ── 8. Mandatory & revenue ──
-  const mandatory = calcMandatoryExpenses(population, metrics);
+  const expenseMult = (state.difficulty || {}).expenseMult || 1;
+  const mandatory = Math.round(calcMandatoryExpenses(population, metrics) * expenseMult);
   budget -= mandatory;
   const taxMult = getTaxRevenueMultiplier((state.economy || {}).taxRate || 10);
   const revenueMult = (state.difficulty || {}).revenueMult || 1;
@@ -402,16 +403,15 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
 
   // ── 9. Progressive debt ──
   if (budget < 0) { newDebt += Math.abs(budget); budget = 0; }
-  const interestRate = newDebt < 100 ? 0.03 : newDebt < 300 ? 0.06 : newDebt < 500 ? 0.10 : 0.15;
+  const interestRate = newDebt < 200 ? 0.02 : newDebt < 500 ? 0.04 : newDebt < 800 ? 0.07 : 0.10;
   newDebt = Math.round(newDebt * (1 + interestRate));
   let defaulted = false;
-  if (newDebt > 100) approvalDelta -= 2;
-  if (newDebt > 200) { for (const k of METRIC_KEYS) metrics[k] -= 1; }
-  if (newDebt > 300) { for (const k of METRIC_KEYS) metrics[k] -= 2; approvalDelta -= 3; }
-  if (newDebt > 500) { for (const k of METRIC_KEYS) metrics[k] -= 3; approvalDelta -= 5; }
-  if (newDebt > 700) defaulted = true;
+  if (newDebt > 200) approvalDelta -= 2;
+  if (newDebt > 400) { for (const k of METRIC_KEYS) metrics[k] -= 1; approvalDelta -= 2; }
+  if (newDebt > 600) { for (const k of METRIC_KEYS) metrics[k] -= 1; approvalDelta -= 3; }
+  if (newDebt > 1000) defaulted = true;
   if (newDebt > 0 && budget > 0) {
-    const minPay = Math.min(budget, Math.max(20, Math.round(newDebt * 0.1)));
+    const minPay = Math.min(budget, Math.max(15, Math.round(newDebt * 0.08)));
     budget -= minPay; newDebt -= minPay;
   }
 
