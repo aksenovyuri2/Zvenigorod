@@ -105,6 +105,17 @@ export const ALL_EVENTS = [
       { label:"Отказать", effects:{}, budget:0 },
     ] },
   { id:"christmas_fair", text:"🎄 Рождественская ярмарка прошла с аншлагом!", effects:{culture:4,economy:3}, budget:15, season:3 },
+  // Milestone events
+  { id:"milestone_10", text:"📊 Губернатор лично приехал проверить прогресс Звенигорода. «Посмотрим, что покажете дальше».", minTurn:10,
+    choices:[
+      { label:"Попросить федеральный грант", effects:{}, budget:100, approval:3 },
+      { label:"Предложить совместный проект", effects:{infrastructure:4,economy:3}, budget:0 },
+    ] },
+  { id:"milestone_30", text:"⏰ Журналисты подводят промежуточный итог вашего правления.", minTurn:28,
+    choices:[
+      { label:"Дать интервью — рассказать об успехах", effects:{culture:3}, budget:0, approval:5 },
+      { label:"Действия говорят громче слов", effects:{}, budget:0, approval:2 },
+    ] },
   { id:"train_lastochka", text:"🚂 РЖД запустила «Ласточку» до Звенигорода!", effects:{infrastructure:6,economy:5}, budget:0, population:700, minTurn:8 },
   { id:"graffiti", text:"🎨 Граффитисты разрисовали новые фасады.", effects:{}, budget:0, randomCulture:true },
   { id:"measles", text:"🏥 Эпидемия кори! Не хватает вакцин.", effects:{healthcare:-8,safety:-3}, budget:0, population:-200, requires:{healthcare_lt:40} },
@@ -149,6 +160,11 @@ export const ACHIEVEMENTS = [
   { id:"financier", name:"Финансист", cond:(s)=>s.debt===0&&s.turn>=20, icon:"🏦" },
   { id:"balance_master", name:"Баланс мастер", cond:(s)=>METRIC_KEYS.every(k=>s.metrics[k]>=40&&s.metrics[k]<=70), icon:"🎯" },
   { id:"comeback", name:"Камбэк", cond:(s)=>s.approval>=60&&(s.approvalHistory||[]).some(a=>a<20), icon:"🔄" },
+  { id:"diplomat", name:"Дипломат", cond:(s)=>{const r=s.neighborRelations||{};return Object.values(r).every(v=>v.relationship>=30)}, icon:"🤝" },
+  { id:"builder", name:"Великий строитель", cond:(s)=>s.metrics.infrastructure>=85, icon:"🏗️" },
+  { id:"healer", name:"Целитель", cond:(s)=>s.metrics.healthcare>=85, icon:"🏥" },
+  { id:"educator", name:"Просветитель", cond:(s)=>s.metrics.education>=85, icon:"📚" },
+  { id:"marathon", name:"Марафонец", cond:(s)=>s.turn>=40, icon:"🏁" },
 ];
 
 export const ELECTION_PROMISES = [

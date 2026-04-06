@@ -10,6 +10,7 @@ import {
   Award, Zap, Globe, ThumbsUp, Info, Newspaper,
   Bug, Skull, Megaphone, Waves, ShieldAlert, UserMinus,
   Landmark, Briefcase, HelpCircle, Rocket,
+  PanelLeftClose, PanelLeftOpen, Star, Sparkles,
 } from "lucide-react";
 
 // Import v3 engine
@@ -25,6 +26,7 @@ import { calcRevenue, calcMandatoryExpenses } from "./src/engine/calculator.js";
 import { getCurrentCrisisPhase } from "./src/engine/crises.js";
 import { generateLetterText } from "./src/npc/npcEngine.js";
 import { NEIGHBORS, DIPLOMATIC_ACTIONS, JOINT_PROJECTS } from "./src/political/diplomacy.js";
+import { FACTIONS } from "./src/political/dumaEngine.js";
 
 // Icon mapping: string keys from engine to React components
 const ICON_MAP = {
@@ -415,7 +417,7 @@ function CrisisPhase({ state, dispatch }) {
           )}
 
           <button onClick={() => dispatch({ type: "SKIP_CRISIS_ACTION" })}
-            className="w-full py-3 bg-transparent text-[#191c1f] border-2 border-[#c0c0c0] font-medium rounded-full transition-colors text-sm hover:border-[#f4f4f4]">
+            className="w-full py-3 bg-transparent text-[#191c1f] border-2 border-[#c0c0c0] font-medium rounded-full transition-colors text-sm hover:border-[#191c1f]">
             Не предпринимать мер
           </button>
         </div>
@@ -464,6 +466,23 @@ function EventPhase({ event, onContinue, onChoice }) {
   );
 }
 
+function MilestoneToast({ turn, metrics }) {
+  const [show, setShow] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setShow(false), 5000); return () => clearTimeout(t); }, []);
+  if (!show) return null;
+  const msg = turn === 10 ? "🎯 10 кварталов за плечами! Первая четверть пути пройдена." : turn === 30 ? "⚡ 30-й квартал — финишная прямая! Осталось 10 ходов." : null;
+  if (!msg) return null;
+  return (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
+      <FadeIn><div className="px-6 py-3 rounded-2xl bg-[#f7f7f7] border border-[#4f55f1]/30 shadow-lg flex items-center gap-3">
+        <Sparkles size={18} className="text-[#4f55f1]" />
+        <span className="text-sm text-[#191c1f] font-medium">{msg}</span>
+        <button onClick={() => setShow(false)} className="text-[#9ca3af] hover:text-[#191c1f]"><X size={14} /></button>
+      </div></FadeIn>
+    </div>
+  );
+}
+
 function DecisionPhase({ state, dispatch }) {
   const { turn, budget, debt, population, metrics, prevMetrics, selectedDecisions, availableDecisions, globalRankIdx, satisfactions, prevSatisfactions, recurringEffects, costMultiplier, costMultiplierTurns, approval, zvenigorodScore, advisorComments } = state;
   const totalCost = selectedDecisions.reduce((s, id) => { const d = ALL_DECISIONS.find(x => x.id === id); return s + (d ? Math.round(d.cost * (costMultiplier || 1)) : 0); }, 0);
@@ -473,6 +492,7 @@ function DecisionPhase({ state, dispatch }) {
   const [showRankFull, setShowRankFull] = useState(false);
   const [sidebarTab, setSidebarTab] = useState("groups");
   const [projectPickerFor, setProjectPickerFor] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const avgSat = calcAvgSatisfaction(satisfactions);
   const season = turn % 4;
   const SeasonIcon = SEASON_ICONS[season];
@@ -481,16 +501,25 @@ function DecisionPhase({ state, dispatch }) {
   const term = turn < ELECTION_TURN ? 1 : 2;
   const termTurn = turn < ELECTION_TURN ? turn + 1 : turn - ELECTION_TURN + 1;
   const metricHistory = (mk) => state.history.map(h => h.metrics[mk]);
+  // Notification dots
+  const hasLetters = (state.npcLetters || []).length > 0 && (state.respondedLetters || []).length < (state.npcLetters || []).length;
+  const hasProtests = (state.activeProtests || []).length > 0;
+  const hasCritical = METRIC_KEYS.some(k => metrics[k] < 20);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      {(turn === 10 || turn === 30) && <MilestoneToast turn={turn} metrics={metrics} />}
       <FadeIn className="flex flex-col overflow-hidden h-full">
         {/* Header */}
         <div className="px-4 pt-2 pb-1 shrink-0">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-3">
+              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-1 rounded-lg hover:bg-[#f0f0f0] transition-colors" title="Панель метрик">
+                {sidebarOpen ? <PanelLeftClose size={18} className="text-[#6b7280]" /> : <PanelLeftOpen size={18} className="text-[#6b7280]" />}
+                {!sidebarOpen && (hasLetters || hasProtests || hasCritical) && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#e23b4a]" />}
+              </button>
               <h1 className="text-lg md:text-xl font-bold text-[#191c1f]">Q{quarter} {year}</h1>
-              <span className="text-xs text-[#9ca3af]">Срок {term}, ход {termTurn}/{ELECTION_TURN}</span>
+              <span className="text-xs text-[#9ca3af] hidden sm:inline">Срок {term}, ход {termTurn}/{ELECTION_TURN}</span>
               <span className="flex items-center gap-1 text-xs text-[#6b7280]"><SeasonIcon size={14} />{SEASON_NAMES[season]}</span>
             </div>
             <div className="flex items-center gap-3">
@@ -537,7 +566,7 @@ function DecisionPhase({ state, dispatch }) {
         {/* Main content */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 px-4 pb-2 overflow-hidden">
           {/* Sidebar */}
-          <div className="lg:col-span-4 overflow-y-auto pr-1 space-y-3">
+          <div className={`lg:col-span-4 overflow-y-auto pr-1 space-y-3 transition-all duration-300 ${sidebarOpen ? "block" : "hidden lg:block"}`}>
             <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-3">
               <h2 className="text-xs font-bold text-[#6b7280] uppercase tracking-wider mb-2">Метрики города</h2>
               <div className="space-y-1">
@@ -717,13 +746,14 @@ function DecisionPhase({ state, dispatch }) {
               );
             })()}
 
-            {/* Tabs: Группы / Рейтинг / Соседи */}
+            {/* Tabs: Группы / Рейтинг / Соседи / Дума / Жители */}
             <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-3">
-              <div className="flex gap-1 mb-3">
-                {[["groups","Группы"],["rank","Рейтинг"],["diplomacy","Соседи"],["residents","Жители"]].map(([tab, label]) => (
+              <div className="flex gap-1 mb-3 flex-wrap">
+                {[["groups","Группы"],["rank","Рейтинг"],["diplomacy","Соседи"],["duma","Дума"],["residents","Жители"]].map(([tab, label]) => (
                   <button key={tab} onClick={() => setSidebarTab(tab)}
-                    className={`flex-1 py-1 text-[11px] font-semibold rounded-full transition-colors ${sidebarTab === tab ? "bg-[#4f55f1] text-white" : "bg-[#e8e8e8] text-[#6b7280] hover:text-[#191c1f]"}`}>
+                    className={`relative flex-1 py-1 text-[11px] font-semibold rounded-full transition-colors ${sidebarTab === tab ? "bg-[#4f55f1] text-white" : "bg-[#e8e8e8] text-[#6b7280] hover:text-[#191c1f]"}`}>
                     {label}
+                    {tab === "residents" && hasLetters && sidebarTab !== "residents" && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#e23b4a]" />}
                   </button>
                 ))}
               </div>
@@ -772,6 +802,50 @@ function DecisionPhase({ state, dispatch }) {
                       );
                     })}
                     <div className="text-[10px] text-[#9ca3af] text-center pt-1">{allNPCs.length} жителей в базе</div>
+                  </div>
+                );
+              })()}
+
+              {sidebarTab === "duma" && (() => {
+                const deputies = state.deputies || [];
+                if (deputies.length === 0) return <div className="text-xs text-[#9ca3af] text-center py-4">Депутаты появятся после первого хода</div>;
+                const factionGroups = {};
+                for (const d of deputies) {
+                  if (!factionGroups[d.faction]) factionGroups[d.faction] = [];
+                  factionGroups[d.faction].push(d);
+                }
+                return (
+                  <div className="space-y-2">
+                    {Object.entries(factionGroups).map(([fKey, members]) => {
+                      const faction = FACTIONS[fKey];
+                      if (!faction) return null;
+                      const FIcon = ICON_MAP[faction.icon] || HelpCircle;
+                      return (
+                        <div key={fKey} className="rounded-xl bg-[#f0f0f0] p-2">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <FIcon size={12} className="text-[#4f55f1]" />
+                            <span className="text-[10px] font-bold text-[#191c1f] uppercase tracking-wider">{faction.name}</span>
+                            <span className="text-[10px] text-[#9ca3af] ml-auto">{faction.desc}</span>
+                          </div>
+                          {members.map(d => {
+                            const loyaltyColor = d.loyalty >= 60 ? "text-[#00a87e]" : d.loyalty >= 40 ? "text-[#ec7e00]" : "text-[#e23b4a]";
+                            return (
+                              <div key={d.id} className="flex items-center gap-1.5 py-0.5 text-xs">
+                                <span>{d.avatar}</span>
+                                <span className="text-[#191c1f] flex-1 truncate">{d.shortName || d.name.split(" ").pop()}</span>
+                                <span className={`font-mono text-[10px] ${loyaltyColor}`} title="Лояльность">{Math.round(d.loyalty)}%</span>
+                                <div className="w-10 h-1 rounded-full bg-[#e8e8e8] overflow-hidden">
+                                  <div className="h-full rounded-full" style={{ width: `${d.loyalty}%`, backgroundColor: d.loyalty >= 60 ? "#10b981" : d.loyalty >= 40 ? "#f59e0b" : "#ef4444" }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                    <div className="text-[10px] text-[#9ca3af] text-center pt-1">
+                      Средняя лояльность: {Math.round(deputies.reduce((s, d) => s + d.loyalty, 0) / deputies.length)}%
+                    </div>
                   </div>
                 );
               })()}
@@ -1282,7 +1356,7 @@ function ElectionLossScreen({ state, dispatch }) {
             </button>
             <button
               onClick={() => dispatch({ type: "RESTART_FRESH" })}
-              className="w-full py-3 bg-transparent text-[#191c1f] font-medium rounded-full text-sm border-2 border-[#c0c0c0] flex items-center justify-center gap-2 transition-colors hover:border-[#f4f4f4]"
+              className="w-full py-3 bg-transparent text-[#191c1f] font-medium rounded-full text-sm border-2 border-[#c0c0c0] flex items-center justify-center gap-2 transition-colors hover:border-[#191c1f]"
             >
               <Zap size={16} />Другой сценарий
             </button>
@@ -1297,7 +1371,7 @@ function ElectionLossScreen({ state, dispatch }) {
 // END SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function EndScreen({ state, onRestart }) {
+function EndScreen({ state, onRestart, onRestartFresh }) {
   const grade = getGrade(state.globalRankIdx);
   const history = state.history;
   const rankData = history.map(h => ({ turn:`К${h.turn}`, rank: h.globalRankIdx + 1 }));
@@ -1403,7 +1477,10 @@ function EndScreen({ state, onRestart }) {
           </div>
         </div>
 
-        <button onClick={onRestart} className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.97] transition-all"><RotateCcw size={20} />Играть снова</button>
+        <div className="flex flex-col gap-3">
+          <button onClick={onRestart} className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.97] transition-all"><RotateCcw size={20} />Играть снова</button>
+          <button onClick={onRestartFresh} className="w-full py-3 bg-transparent text-[#191c1f] font-medium rounded-full text-sm border-2 border-[#c0c0c0] flex items-center justify-center gap-2 transition-colors hover:border-[#191c1f]"><Zap size={16} />Другой сценарий</button>
+        </div>
       </FadeIn>
     </div>
   );
@@ -1424,8 +1501,10 @@ export default function ZvenigorodMayorSim() {
         .animate-marquee { animation: marquee 30s linear infinite; }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #3b3b3d; border-radius: 2px; }
-        ::-webkit-scrollbar-thumb:hover { background: #525254; }
+        ::-webkit-scrollbar-thumb { background: #c0c0c0; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+        @keyframes notif-ping { 0% { transform: scale(1); opacity:1; } 75% { transform: scale(1.8); opacity:0; } 100% { transform: scale(1); opacity:0; } }
+        .notif-dot::after { content:''; position:absolute; inset:-1px; border-radius:9999px; animation: notif-ping 1.5s cubic-bezier(0,0,0.2,1) infinite; background: inherit; }
       `}</style>
       {state.phase === "start" && <StartScreen onStart={(scenarioId, difficultyId) => dispatch({ type: "START_GAME", seed: Date.now(), scenarioId, difficultyId })} />}
       {state.phase === "crisis" && <CrisisPhase state={state} dispatch={dispatch} />}
@@ -1436,7 +1515,7 @@ export default function ZvenigorodMayorSim() {
       {state.phase === "election_vote" && <ElectionVote state={state} dispatch={dispatch} />}
       {state.phase === "election_result" && <ElectionVote state={state} dispatch={dispatch} />}
       {state.phase === "election_loss" && <ElectionLossScreen state={state} dispatch={dispatch} />}
-      {state.phase === "end" && <EndScreen state={state} onRestart={() => dispatch({ type: "RESTART" })} />}
+      {state.phase === "end" && <EndScreen state={state} onRestart={() => dispatch({ type: "RESTART" })} onRestartFresh={() => dispatch({ type: "RESTART_FRESH" })} />}
     </div>
   );
 }
