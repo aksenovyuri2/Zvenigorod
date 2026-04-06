@@ -316,84 +316,316 @@ function RankingTable({ zvScore, rankIdx, expanded, onToggle }) {
 // PHASE SCREENS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function ZvenigorodPanorama() {
+  return (
+    <svg viewBox="0 0 800 260" className="w-full h-full" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="ob-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#c5dff5" />
+          <stop offset="55%" stopColor="#deeef8" />
+          <stop offset="100%" stopColor="#eee8d8" />
+        </linearGradient>
+        <linearGradient id="ob-hill1" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#7aad5c" />
+          <stop offset="100%" stopColor="#5a8a40" />
+        </linearGradient>
+        <linearGradient id="ob-hill2" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#90c070" />
+          <stop offset="100%" stopColor="#6a9850" />
+        </linearGradient>
+        <linearGradient id="ob-water" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#7ab8e8" />
+          <stop offset="100%" stopColor="#5898c8" />
+        </linearGradient>
+        <linearGradient id="ob-ground" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#c8ba98" />
+          <stop offset="100%" stopColor="#a89870" />
+        </linearGradient>
+      </defs>
+
+      {/* Sky */}
+      <rect width="800" height="260" fill="url(#ob-sky)" />
+
+      {/* Clouds */}
+      <ellipse cx="100" cy="40" rx="70" ry="22" fill="white" opacity="0.75" />
+      <ellipse cx="155" cy="30" rx="55" ry="18" fill="white" opacity="0.65" />
+      <ellipse cx="60" cy="48" rx="45" ry="15" fill="white" opacity="0.55" />
+      <ellipse cx="480" cy="32" rx="85" ry="20" fill="white" opacity="0.6" />
+      <ellipse cx="555" cy="22" rx="60" ry="16" fill="white" opacity="0.5" />
+      <ellipse cx="690" cy="42" rx="75" ry="19" fill="white" opacity="0.45" />
+
+      {/* Far forest horizon */}
+      <ellipse cx="400" cy="185" rx="480" ry="60" fill="#a8cc88" opacity="0.35" />
+
+      {/* Monastery hill — left */}
+      <path d="M -10 190 Q 60 110 140 130 Q 175 138 178 195 Z" fill="url(#ob-hill1)" />
+      {/* Monastery walls */}
+      <rect x="28" y="133" width="118" height="57" rx="2" fill="#ddd4b0" />
+      <rect x="28" y="131" width="9" height="12" rx="1" fill="#ccc2a0" />
+      <rect x="137" y="131" width="9" height="12" rx="1" fill="#ccc2a0" />
+      <rect x="28" y="133" width="118" height="5" fill="#c8b898" />
+      {/* Crenellations */}
+      {[34,42,50,58,66,74,82,90,98,106,114,122,130].map(x => (
+        <rect key={x} x={x} y={129} width="5" height="6" rx="1" fill="#c0b090" />
+      ))}
+      {/* Main cathedral */}
+      <rect x="52" y="105" width="38" height="38" rx="2" fill="#ece0c0" />
+      <rect x="55" y="102" width="32" height="9" rx="1" fill="#ddd0b0" />
+      <ellipse cx="71" cy="100" rx="11" ry="7" fill="#d4c8a8" />
+      <path d="M 63 100 Q 71 78 79 100 Z" fill="#507838" />
+      <line x1="71" y1="77" x2="71" y2="71" stroke="#c8a850" strokeWidth="1.8" />
+      <line x1="68" y1="74" x2="74" y2="74" stroke="#c8a850" strokeWidth="1.2" />
+      {/* Bell tower */}
+      <rect x="98" y="113" width="22" height="32" rx="1" fill="#e0d4b4" />
+      <polygon points="96,113 109,97 121,113" fill="#d0c4a4" />
+      <path d="M 103 97 Q 109 85 115 97 Z" fill="#507838" />
+      <line x1="109" y1="84" x2="109" y2="78" stroke="#c8a850" strokeWidth="1.2" />
+      {/* Small chapel */}
+      <rect x="32" y="123" width="16" height="17" rx="1" fill="#ddd2b2" />
+      <path d="M 30 123 Q 40 112 50 123 Z" fill="#ccc0a0" />
+      <path d="M 35 112 Q 40 104 45 112 Z" fill="#507838" />
+
+      {/* Kremlin hill — center */}
+      <path d="M 195 190 Q 280 125 385 148 Q 408 155 410 195 Z" fill="url(#ob-hill2)" />
+      {/* Kremlin wall */}
+      <rect x="235" y="163" width="105" height="17" rx="1" fill="#d0c4a4" />
+      {[241,249,257,265,273,281,289,297,305,313,321].map(x => (
+        <rect key={x} x={x} y={159} width="5" height="7" rx="1" fill="#c4b898" />
+      ))}
+      <rect x="235" y="162" width="11" height="14" rx="1" fill="#c4b898" />
+      <rect x="329" y="162" width="11" height="14" rx="1" fill="#c4b898" />
+      {/* Assumption Cathedral */}
+      <rect x="252" y="138" width="45" height="35" rx="2" fill="#eee4c8" />
+      <rect x="256" y="135" width="37" height="9" rx="1" fill="#e0d4b8" />
+      {/* 5 domes */}
+      <ellipse cx="274" cy="133" rx="10" ry="6" fill="#d8cdb8" />
+      <path d="M 266 133 Q 274 114 282 133 Z" fill="#507838" />
+      <line x1="274" y1="113" x2="274" y2="107" stroke="#c8a850" strokeWidth="1.8" />
+      <line x1="271" y1="110" x2="277" y2="110" stroke="#c8a850" strokeWidth="1.2" />
+      <ellipse cx="260" cy="136" rx="7" ry="5" fill="#ccc2a8" />
+      <path d="M 255 136 Q 260 125 265 136 Z" fill="#4a7030" />
+      <line x1="260" y1="124" x2="260" y2="119" stroke="#c8a850" strokeWidth="1" />
+      <ellipse cx="288" cy="136" rx="7" ry="5" fill="#ccc2a8" />
+      <path d="M 283 136 Q 288 125 293 136 Z" fill="#4a7030" />
+      <line x1="288" y1="124" x2="288" y2="119" stroke="#c8a850" strokeWidth="1" />
+      {/* Old town buildings */}
+      <rect x="308" y="145" width="22" height="30" rx="1" fill="#ddd0b0" />
+      <polygon points="308,145 319,130 330,145" fill="#ccc0a0" />
+      <rect x="340" y="150" width="28" height="25" rx="1" fill="#d4c8a8" />
+      <polygon points="340,150 354,137 368,150" fill="#c8b898" />
+
+      {/* Modern residential blocks */}
+      <rect x="415" y="148" width="38" height="57" rx="2" fill="#d0ccc4" />
+      {[420,430,440].map(x => [152,164,176].map(y => (
+        <rect key={`${x}-${y}`} x={x} y={y} width="7" height="9" rx="1" fill="#9090a8" opacity="0.45" />
+      )))}
+      <rect x="464" y="155" width="32" height="50" rx="2" fill="#ccc8c0" />
+      {[469,479].map(x => [159,171,183].map(y => (
+        <rect key={`${x}-${y}`} x={x} y={y} width="7" height="9" rx="1" fill="#9090a8" opacity="0.4" />
+      )))}
+      <rect x="507" y="160" width="42" height="45" rx="2" fill="#c8c4bc" />
+      {[512,522,532].map(x => [164,175].map(y => (
+        <rect key={`${x}-${y}`} x={x} y={y} width="7" height="8" rx="1" fill="#9090a8" opacity="0.4" />
+      )))}
+
+      {/* Railway station */}
+      <rect x="558" y="168" width="68" height="37" rx="3" fill="#d4c898" />
+      <polygon points="558,168 592,150 626,168" fill="#c8bc88" />
+      <rect x="572" y="157" width="38" height="5" rx="1" fill="#b8ac78" opacity="0.7" />
+      <rect x="575" y="183" width="18" height="22" rx="1" fill="#e0d4b0" />
+      <rect x="596" y="185" width="14" height="20" rx="1" fill="#e0d4b0" />
+      {/* Clock on station */}
+      <circle cx="592" cy="162" r="5" fill="white" opacity="0.9" />
+      <line x1="592" y1="159" x2="592" y2="162" stroke="#666" strokeWidth="1" />
+      <line x1="592" y1="162" x2="595" y2="162" stroke="#666" strokeWidth="1" />
+
+      {/* Train */}
+      <rect x="560" y="208" width="90" height="14" rx="4" fill="#f0f0f0" />
+      <rect x="560" y="208" width="22" height="14" rx="4" fill="#4f55f1" />
+      <rect x="564" y="211" width="10" height="7" rx="1" fill="white" opacity="0.8" />
+      {[573, 589, 605, 622, 638].map(cx => (
+        <circle key={cx} cx={cx} cy={223} r="3.5" fill="#444" />
+      ))}
+      {/* Rail tracks */}
+      <line x1="490" y1="220" x2="800" y2="215" stroke="#888" strokeWidth="2" opacity="0.7" />
+      <line x1="490" y1="223" x2="800" y2="218" stroke="#888" strokeWidth="1" opacity="0.4" />
+      {[500,514,528,542,556,570,584,598,612,626,640,654,668,682,696,710,724,738,752,766,780].map(x => (
+        <line key={x} x1={x} y1={219 + (x-490)*0.022} x2={x} y2={224 + (x-490)*0.022} stroke="#888" strokeWidth="2.5" opacity="0.55" />
+      ))}
+
+      {/* River Moskva */}
+      <path d="M 0 215 Q 50 200 100 210 Q 150 220 200 210 Q 260 200 310 208 Q 360 216 420 210 Q 480 204 540 210 Q 620 218 700 210 Q 750 205 800 210 L 800 260 L 0 260 Z" fill="url(#ob-water)" opacity="0.75" />
+      <path d="M 0 218 Q 50 204 100 213 Q 150 223 200 213 Q 260 203 310 211 Q 360 219 420 213" fill="none" stroke="white" strokeWidth="1.2" opacity="0.4" />
+
+      {/* Forest patches */}
+      {[{cx:152,cy:180,rx:8,ry:14},{cx:162,cy:176,rx:7,ry:12},{cx:143,cy:183,rx:7,ry:11}].map((e,i) => (
+        <ellipse key={i} cx={e.cx} cy={e.cy} rx={e.rx} ry={e.ry} fill="#4a8030" opacity="0.82" />
+      ))}
+      {[{cx:395,cy:165,rx:7,ry:11},{cx:405,cy:162,rx:6,ry:10}].map((e,i) => (
+        <ellipse key={i} cx={e.cx} cy={e.cy} rx={e.rx} ry={e.ry} fill="#4a8030" opacity="0.7" />
+      ))}
+      {/* City park */}
+      <ellipse cx="448" cy="200" rx="14" ry="9" fill="#72b050" opacity="0.7" />
+      <ellipse cx="474" cy="205" rx="11" ry="8" fill="#68a848" opacity="0.6" />
+
+      {/* Main road */}
+      <path d="M 185 205 Q 310 196 450 202 Q 560 207 700 200" fill="none" stroke="#c0b080" strokeWidth="3.5" opacity="0.55" />
+
+      {/* Ground strip */}
+      <rect x="0" y="213" width="800" height="8" fill="url(#ob-ground)" opacity="0.5" />
+    </svg>
+  );
+}
+
+const ONBOARDING_STEPS = ["welcome", "scenario", "difficulty"];
+const DIFFICULTY_DESCS = {
+  easy: "Больше бюджета, 3 решения за ход. Идеально для первого запуска.",
+  normal: "Стандартный баланс. 2 решения, обычный бюджет.",
+  hard: "Меньше денег, быстрый износ. Для опытных мэров.",
+  hardcore: "Минимум ресурсов, 1 решение за ход. Удачи.",
+};
+
 function StartScreen({ onStart }) {
+  const [step, setStep] = useState(0);
   const [scenarioId, setScenarioId] = useState("standard");
   const [difficultyId, setDifficultyId] = useState("normal");
+  const [leaving, setLeaving] = useState(false);
+
+  const goNext = () => {
+    setLeaving(true);
+    setTimeout(() => { setStep(s => s + 1); setLeaving(false); }, 220);
+  };
+  const goBack = () => {
+    setLeaving(true);
+    setTimeout(() => { setStep(s => s - 1); setLeaving(false); }, 220);
+  };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden">
-      <div className="absolute inset-0 bg-white" />
-      <FadeIn className="relative z-10 text-center max-w-2xl">
-        <div className="mb-8">
-          <svg viewBox="0 0 400 180" className="w-80 mx-auto mb-6">
-            <rect x="0" y="140" width="400" height="40" rx="4" fill="#e0e0e0" opacity="0.5" />
-            <path d="M40,140 Q200,100 360,140" stroke="#4f55f1" fill="none" strokeWidth="2" opacity="0.3" />
-            <rect x="60" y="80" width="35" height="60" rx="2" fill="#c0c0c0" /><rect x="65" y="85" width="8" height="10" rx="1" fill="#4f55f1" opacity="0.4" /><rect x="80" y="85" width="8" height="10" rx="1" fill="#4f55f1" opacity="0.25" /><rect x="65" y="100" width="8" height="10" rx="1" fill="#4f55f1" opacity="0.3" /><rect x="80" y="100" width="8" height="10" rx="1" fill="#4f55f1" opacity="0.2" />
-            <rect x="110" y="60" width="40" height="80" rx="2" fill="#d0d0d0" /><polygon points="130,40 108,60 152,60" fill="#b0b0b0" /><circle cx="130" cy="52" r="4" fill="#4f55f1" opacity="0.5" /><rect x="120" y="110" width="18" height="30" rx="1" fill="#e8e8e8" />
-            <rect x="170" y="55" width="60" height="85" rx="2" fill="#d0d0d0" /><polygon points="200,30 167,55 233,55" fill="#b0b0b0" /><circle cx="200" cy="43" r="5" fill="#4f55f1" opacity="0.6" /><rect x="180" y="65" width="10" height="14" rx="1" fill="#4f55f1" opacity="0.4" /><rect x="195" y="65" width="10" height="14" rx="1" fill="#4f55f1" opacity="0.25" /><rect x="210" y="65" width="10" height="14" rx="1" fill="#4f55f1" opacity="0.3" /><rect x="188" y="105" width="24" height="35" rx="2" fill="#e8e8e8" />
-            <rect x="250" y="75" width="45" height="65" rx="2" fill="#c0c0c0" /><rect x="255" y="80" width="10" height="12" rx="1" fill="#4f55f1" opacity="0.3" /><rect x="270" y="80" width="10" height="12" rx="1" fill="#4f55f1" opacity="0.25" /><rect x="262" y="115" width="16" height="25" rx="1" fill="#e8e8e8" />
-            <rect x="310" y="90" width="35" height="50" rx="2" fill="#c0c0c0" /><rect x="315" y="95" width="8" height="10" rx="1" fill="#4f55f1" opacity="0.3" /><rect x="330" y="95" width="8" height="10" rx="1" fill="#4f55f1" opacity="0.2" /><rect x="318" y="115" width="14" height="25" rx="1" fill="#e8e8e8" />
-          </svg>
-        </div>
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <MapPin className="text-[#4f55f1]" size={24} />
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-[#191c1f]">Звенигород</h1>
-        </div>
-        <h2 className="text-xl md:text-2xl font-light text-[#6b7280] mb-8 tracking-wide">Симулятор Мэра</h2>
-        <p className="text-base text-[#6b7280] mb-8 max-w-lg mx-auto leading-relaxed">
-          Вы — новый мэр Звенигорода. У вас два срока по 5 лет, чтобы превратить тихий подмосковный город в лучшее место для жизни на планете.
-        </p>
+    <div className="min-h-screen flex flex-col overflow-hidden" style={{ background: "linear-gradient(to bottom, #deeef8 0%, #eee8d8 40%, #f4f0e8 100%)" }}>
+      {/* Panorama illustration */}
+      <div className="w-full shrink-0 overflow-hidden" style={{ height: "clamp(180px, 32vw, 280px)" }}>
+        <ZvenigorodPanorama />
+      </div>
 
-        {/* Scenario picker */}
-        <div className="mb-6 text-left max-w-md mx-auto">
-          <h3 className="text-xs font-bold text-[#6b7280] uppercase tracking-wider mb-2">Сценарий</h3>
-          <div className="space-y-2">
-            {SCENARIOS.map(s => (
-              <button key={s.id} onClick={() => setScenarioId(s.id)}
-                className={`w-full text-left px-4 py-3 rounded-2xl border transition-colors ${scenarioId === s.id ? "border-[#4f55f1] bg-[#f7f7f7]" : "border-[#e0e0e0] bg-[#f7f7f7] hover:border-[#c0c0c0]"}`}>
-                <div className="text-sm font-bold text-[#191c1f]">{s.name}</div>
-                <div className="text-xs text-[#6b7280]">{s.desc}</div>
+      {/* Step indicator */}
+      <div className="flex items-center justify-center gap-2 pt-4 pb-2">
+        {ONBOARDING_STEPS.map((_, i) => (
+          <div key={i} className="rounded-full transition-all duration-300"
+            style={{ width: i === step ? 20 : 6, height: 6, backgroundColor: i === step ? "#4f55f1" : i < step ? "#a0a8f8" : "#c8b898" }} />
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className={`flex-1 flex flex-col items-center px-4 pb-8 pt-2 transition-all duration-200 ${leaving ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"}`}
+        style={{ transform: leaving ? "translateY(8px)" : "translateY(0)" }}>
+
+        {step === 0 && (
+          <div key="s0" className="ob-step text-center max-w-lg w-full">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <MapPin className="text-[#4f55f1]" size={20} />
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-[#1a1410]">Звенигород</h1>
+            </div>
+            <p className="text-sm text-[#8a7858] mb-5 tracking-wide">Симулятор Мэра · 1985–2005</p>
+
+            <div className="rounded-3xl bg-white/75 border border-[#e8dcc8] p-5 mb-5 text-left backdrop-blur-sm">
+              <p className="text-sm text-[#3a2e20] leading-relaxed mb-3">
+                <strong>Подмосковье, 1985 год.</strong> Над рекой Москвой поднимаются купола Саввино-Сторожевского монастыря. Тихий город на холмах ждёт своего часа.
+              </p>
+              <p className="text-sm text-[#6b5840] leading-relaxed">
+                Вас назначают <strong>мэром Звенигорода</strong>. Население 25 000 человек. Два срока по 5 лет. Что вы оставите потомкам?
+              </p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-3 mb-5 max-w-sm mx-auto">
+              {[["📋","Решения\nкаждый квартал"],["📊","8 метрик\nгорода"],["🗳️","Выборы\nна 20-м ходу"],["🏆","Мировой\nрейтинг"]].map(([icon, text]) => (
+                <div key={icon} className="rounded-2xl bg-white/60 border border-[#e8dcc8] p-2 text-center">
+                  <div className="text-xl mb-1">{icon}</div>
+                  <div className="text-[9px] text-[#8a7858] leading-tight whitespace-pre-line">{text}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-5 mb-5 justify-center text-xs text-[#8a7858]">
+              <span>👥 25 000</span><span>💰 850 млн</span><span>📅 40 ходов</span>
+            </div>
+
+            <button onClick={goNext} className="inline-flex items-center gap-2.5 px-8 py-3.5 bg-[#1a1410] text-white font-semibold rounded-full hover:opacity-90 active:scale-[0.97] transition-all text-sm">
+              Начать путь <ArrowRight size={16} />
+            </button>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div key="s1" className="ob-step max-w-lg w-full">
+            <div className="text-center mb-5">
+              <h2 className="text-2xl font-bold text-[#1a1410] mb-1">Выберите сценарий</h2>
+              <p className="text-sm text-[#8a7858]">С какими вызовами начнётся ваш срок?</p>
+            </div>
+            <div className="space-y-2 mb-5">
+              {SCENARIOS.map(s => (
+                <button key={s.id} onClick={() => setScenarioId(s.id)}
+                  className={`w-full text-left px-5 py-4 rounded-2xl border transition-all ${
+                    scenarioId === s.id
+                      ? "border-[#4f55f1] bg-white shadow-sm"
+                      : "border-[#e8dcc8] bg-white/60 hover:border-[#c8b898] hover:bg-white/80"
+                  }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-[#1a1410]">{s.name}</span>
+                    {scenarioId === s.id && (
+                      <span className="text-[10px] font-bold text-[#4f55f1] bg-[#4f55f1]/10 px-2 py-0.5 rounded-full">✓ Выбрано</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-[#8a7858] mt-0.5">{s.desc}</div>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={goBack} className="flex-1 py-3 bg-transparent text-[#6b5840] border border-[#e8dcc8] font-medium rounded-full hover:bg-white/60 transition-all text-sm">
+                ← Назад
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Difficulty picker */}
-        <div className="mb-8 text-left max-w-md mx-auto">
-          <h3 className="text-xs font-bold text-[#6b7280] uppercase tracking-wider mb-2">Сложность</h3>
-          <div className="flex gap-2">
-            {Object.entries(DIFFICULTIES).map(([id, d]) => (
-              <button key={id} onClick={() => setDifficultyId(id)}
-                className={`flex-1 px-3 py-2.5 rounded-full border text-sm font-medium transition-all active:scale-[0.95] ${difficultyId === id ? "border-[#4f55f1] bg-[#4f55f1] text-white shadow-md shadow-[#4f55f1]/20" : "border-[#e0e0e0] bg-[#f7f7f7] text-[#6b7280] hover:border-[#c0c0c0]"}`}>
-                {d.label}
+              <button onClick={goNext} className="flex-1 py-3 bg-[#1a1410] text-white font-semibold rounded-full hover:opacity-90 active:scale-[0.97] transition-all text-sm flex items-center justify-center gap-2">
+                Далее <ArrowRight size={15} />
               </button>
-            ))}
+            </div>
           </div>
-          <p className="text-[11px] text-[#9ca3af] mt-2 text-center">
-            {difficultyId === "easy" && "💚 Больше бюджета, 3 решения за ход. Идеально для первого запуска."}
-            {difficultyId === "normal" && "⚖️ Стандартный баланс. 2 решения, обычный бюджет."}
-            {difficultyId === "hard" && "🔥 Меньше денег, быстрый износ. Для опытных мэров."}
-            {difficultyId === "hardcore" && "💀 Минимум ресурсов, 1 решение за ход. Удачи."}
-          </p>
-        </div>
+        )}
 
-        {/* How to play */}
-        <div className="mb-8 max-w-md mx-auto rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-4">
-          <div className="grid grid-cols-4 gap-3 text-center">
-            <div><div className="text-2xl mb-1">📋</div><div className="text-[10px] text-[#6b7280] leading-tight">Принимайте решения каждый квартал</div></div>
-            <div><div className="text-2xl mb-1">📊</div><div className="text-[10px] text-[#6b7280] leading-tight">Следите за 8 метриками города</div></div>
-            <div><div className="text-2xl mb-1">🗳️</div><div className="text-[10px] text-[#6b7280] leading-tight">Пройдите выборы на 20-м ходу</div></div>
-            <div><div className="text-2xl mb-1">🏆</div><div className="text-[10px] text-[#6b7280] leading-tight">Поднимите город в мировом рейтинге</div></div>
+        {step === 2 && (
+          <div key="s2" className="ob-step max-w-lg w-full">
+            <div className="text-center mb-5">
+              <h2 className="text-2xl font-bold text-[#1a1410] mb-1">Сложность</h2>
+              <p className="text-sm text-[#8a7858]">Насколько тяжёл путь на вершину?</p>
+            </div>
+            <div className="space-y-2 mb-5">
+              {Object.entries(DIFFICULTIES).map(([id, d]) => (
+                <button key={id} onClick={() => setDifficultyId(id)}
+                  className={`w-full text-left px-5 py-4 rounded-2xl border transition-all ${
+                    difficultyId === id
+                      ? "border-[#4f55f1] bg-white shadow-sm"
+                      : "border-[#e8dcc8] bg-white/60 hover:border-[#c8b898] hover:bg-white/80"
+                  }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-[#1a1410]">{d.label}</span>
+                    {difficultyId === id && (
+                      <span className="text-[10px] font-bold text-[#4f55f1] bg-[#4f55f1]/10 px-2 py-0.5 rounded-full">✓ Выбрано</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-[#8a7858] mt-0.5">{DIFFICULTY_DESCS[id]}</div>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={goBack} className="flex-1 py-3 bg-transparent text-[#6b5840] border border-[#e8dcc8] font-medium rounded-full hover:bg-white/60 transition-all text-sm">
+                ← Назад
+              </button>
+              <button onClick={() => onStart(scenarioId, difficultyId)}
+                className="flex-1 py-3.5 bg-[#1a1410] text-white font-semibold rounded-full hover:opacity-90 active:scale-[0.97] transition-all flex items-center justify-center gap-2 text-sm">
+                <Play size={16} /> Начать игру
+              </button>
+            </div>
           </div>
-        </div>
-
-        <button onClick={() => onStart(scenarioId, difficultyId)} className="inline-flex items-center gap-3 px-8 py-4 bg-[#191c1f] text-white font-semibold text-lg rounded-full hover:opacity-90 active:scale-[0.97] transition-all shadow-lg">
-          <Play size={22} />Начать игру
-        </button>
-        <div className="mt-8 flex items-center gap-6 text-xs text-[#9ca3af] justify-center">
-          <span>👥 25 000</span><span>💰 850 млн</span><span>📅 40 ходов</span><span>🗳️ 2 срока</span>
-        </div>
-      </FadeIn>
+        )}
+      </div>
     </div>
   );
 }
@@ -526,10 +758,105 @@ const DISTRICT_MAP = [
   { id: "waterfront", name: "Набережная", x: 10, y: 75, w: 45, h: 10, metric: "ecology", emoji: "🌊" },
 ];
 
+// Geographic districts with organic SVG paths (viewBox 0 0 200 155)
+const GEO_DISTRICTS = [
+  {
+    id: "savvino",
+    name: "Саввинская слобода",
+    metric: "ecology",
+    emoji: "⛪",
+    // Monastery peninsula — northwest, river bend
+    path: "M 8 14 Q 18 7 32 11 Q 44 16 46 30 Q 44 46 36 52 Q 24 56 14 48 Q 5 40 6 26 Z",
+    labelX: 26, labelY: 32,
+    landmark: { type: "monastery", x: 20, y: 24 },
+  },
+  {
+    id: "upper",
+    name: "Верхний Посад",
+    metric: "culture",
+    emoji: "🏛️",
+    // Kremlin hill — center
+    path: "M 72 22 Q 90 14 108 20 Q 118 28 116 45 Q 112 58 96 62 Q 80 64 70 55 Q 63 46 66 33 Z",
+    labelX: 91, labelY: 40,
+    landmark: { type: "kremlin", x: 90, y: 32 },
+  },
+  {
+    id: "lower",
+    name: "Нижний Посад",
+    metric: "economy",
+    emoji: "🏪",
+    path: "M 68 66 Q 82 60 100 63 Q 114 67 116 78 Q 114 90 98 93 Q 80 94 68 86 Q 62 78 66 68 Z",
+    labelX: 90, labelY: 79,
+  },
+  {
+    id: "dyutkovo",
+    name: "Дютьково",
+    metric: "culture",
+    emoji: "🎨",
+    path: "M 6 58 Q 20 52 36 56 Q 46 62 44 76 Q 40 88 26 90 Q 12 90 6 80 Q 2 70 4 60 Z",
+    labelX: 24, labelY: 73,
+  },
+  {
+    id: "vvedenskoe",
+    name: "Введенское",
+    metric: "healthcare",
+    emoji: "🏥",
+    path: "M 118 12 Q 138 7 158 12 Q 170 18 168 32 Q 164 44 148 48 Q 132 50 120 42 Q 112 34 114 22 Z",
+    labelX: 142, labelY: 30,
+  },
+  {
+    id: "suponevo",
+    name: "Супонево",
+    metric: "education",
+    emoji: "🏫",
+    path: "M 120 52 Q 138 46 158 50 Q 170 56 168 70 Q 164 82 148 84 Q 130 86 120 76 Q 112 68 114 58 Z",
+    labelX: 142, labelY: 67,
+  },
+  {
+    id: "moskovskaya",
+    name: "ул. Московская",
+    metric: "digital",
+    emoji: "📡",
+    path: "M 48 66 Q 60 62 72 66 Q 76 72 74 82 Q 70 90 58 92 Q 46 92 42 84 Q 38 76 42 68 Z",
+    labelX: 58, labelY: 79,
+  },
+  {
+    id: "station",
+    name: "Ж/Д станция",
+    metric: "infrastructure",
+    emoji: "🚂",
+    path: "M 60 102 Q 90 98 118 100 Q 128 104 126 114 Q 122 122 104 124 Q 80 126 62 120 Q 54 114 56 106 Z",
+    labelX: 91, labelY: 113,
+  },
+  {
+    id: "eastern",
+    name: "мкр. Восточный",
+    metric: "infrastructure",
+    emoji: "🏗️",
+    path: "M 160 52 Q 182 48 194 56 Q 198 66 194 78 Q 188 88 172 90 Q 156 90 150 80 Q 146 70 150 60 Z",
+    labelX: 172, labelY: 70,
+  },
+  {
+    id: "waterfront",
+    name: "Набережная",
+    metric: "ecology",
+    emoji: "🌊",
+    path: "M 14 92 Q 50 88 86 92 Q 100 96 100 104 Q 96 112 80 114 Q 50 116 24 112 Q 10 108 10 100 Z",
+    labelX: 54, labelY: 103,
+  },
+  {
+    id: "pochtovaya",
+    name: "Почтовая ул.",
+    metric: "safety",
+    emoji: "🛡️",
+    path: "M 130 98 Q 158 96 178 100 Q 188 106 186 116 Q 182 124 164 126 Q 144 126 132 118 Q 126 110 128 102 Z",
+    labelX: 157, labelY: 112,
+  },
+];
+
 function CityMapModal({ metrics, projects, decisionHistory, onClose }) {
   const [hovered, setHovered] = useState(null);
 
-  // Determine built objects from decision history
   const builtItems = useMemo(() => {
     const items = [];
     for (const [id, count] of Object.entries(decisionHistory || {})) {
@@ -540,74 +867,195 @@ function CityMapModal({ metrics, projects, decisionHistory, onClose }) {
   }, [decisionHistory]);
 
   const activeProjects = (projects || []).filter(p => p.status === "building");
+  const hoveredDistrict = hovered ? GEO_DISTRICTS.find(d => d.id === hovered) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-3xl border border-[#e0e0e0] p-4 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-3xl border border-[#e0e0e0] p-4 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold text-[#191c1f] flex items-center gap-2"><Map size={20} className="text-[#4f55f1]" />Карта Звенигорода</h2>
+          <h2 className="text-lg font-bold text-[#191c1f] flex items-center gap-2">
+            <Map size={20} className="text-[#4f55f1]" />Карта Звенигорода
+          </h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#f0f0f0]"><X size={18} className="text-[#6b7280]" /></button>
         </div>
-        {/* SVG Map */}
-        <div className="relative w-full" style={{ paddingBottom: "55%" }}>
-          <svg viewBox="0 0 100 90" className="absolute inset-0 w-full h-full">
-            {/* River */}
-            <path d="M 0 80 Q 25 72 50 78 Q 75 84 100 76" fill="none" stroke="#93c5fd" strokeWidth="1.5" opacity="0.5" />
-            {DISTRICT_MAP.map(d => {
+
+        {/* Detailed SVG map */}
+        <div className="relative w-full rounded-2xl overflow-hidden border border-[#e8e0d4]" style={{ paddingBottom: "78%" }}>
+          <svg viewBox="0 0 200 155" className="absolute inset-0 w-full h-full">
+            <defs>
+              <linearGradient id="map-bg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#e8f0d8" />
+                <stop offset="100%" stopColor="#d8e4c8" />
+              </linearGradient>
+              <linearGradient id="map-water" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#7ab8e0" />
+                <stop offset="100%" stopColor="#5898c8" />
+              </linearGradient>
+            </defs>
+
+            {/* Map background — terrain */}
+            <rect width="200" height="155" fill="url(#map-bg)" />
+
+            {/* Forest patches */}
+            {[
+              [14,96,10,7],[22,100,8,5],[8,104,7,5],  // south-west forest
+              [170,10,9,7],[180,14,7,6],[175,20,8,5],  // north-east
+              [52,10,8,6],[60,8,6,5],                   // north forest
+              [190,100,8,5],[195,108,6,4],               // east forest
+            ].map(([cx,cy,rx,ry],i) => (
+              <ellipse key={i} cx={cx} cy={cy} rx={rx} ry={ry} fill="#7aae58" opacity="0.55" />
+            ))}
+
+            {/* Storozhka river (small, flows into Moskva near monastery) */}
+            <path d="M 4 8 Q 12 16 18 26 Q 22 36 20 48" fill="none" stroke="#7ab8e0" strokeWidth="2.5" opacity="0.6" />
+            {/* Moskva River — main channel flowing east */}
+            <path d="M 0 50 Q 18 44 36 50 Q 50 56 52 70 Q 54 84 48 95 Q 44 105 50 118 Q 60 132 90 136 Q 120 138 148 132 Q 170 128 192 134 L 200 136 L 200 155 L 0 155 Z"
+              fill="url(#map-water)" opacity="0.55" />
+            <path d="M 0 50 Q 18 44 36 50 Q 50 56 52 70 Q 54 84 48 95 Q 44 105 50 118 Q 60 132 90 136 Q 120 138 148 132 Q 170 128 192 134"
+              fill="none" stroke="#a0d0f0" strokeWidth="1" opacity="0.6" />
+            {/* River label */}
+            <text x="106" y="143" textAnchor="middle" fontSize="3.5" fill="#3a78b8" opacity="0.8" fontStyle="italic">р. Москва</text>
+
+            {/* Roads */}
+            {/* Main road — west to east */}
+            <path d="M 0 68 Q 35 62 68 66 Q 90 68 116 66 Q 148 64 200 68"
+              fill="none" stroke="#c8b888" strokeWidth="1.5" opacity="0.8" />
+            {/* North-south road (monastery to kremlin) */}
+            <path d="M 46 32 Q 58 30 72 36 Q 80 40 82 55 Q 84 68 80 80"
+              fill="none" stroke="#c8b888" strokeWidth="1" opacity="0.7" />
+            {/* Eastern connector */}
+            <path d="M 116 38 Q 134 40 152 46 Q 160 50 162 60"
+              fill="none" stroke="#c8b888" strokeWidth="1" opacity="0.6" />
+            {/* Railway */}
+            <path d="M 0 108 Q 40 104 80 106 Q 110 107 140 104 Q 165 102 200 106"
+              fill="none" stroke="#888" strokeWidth="2.5" opacity="0.65" />
+            <path d="M 0 108 Q 40 104 80 106 Q 110 107 140 104 Q 165 102 200 106"
+              fill="none" stroke="#b8b0a0" strokeWidth="1" opacity="0.4" strokeDasharray="2,3" />
+            {/* Rail ties */}
+            {[10,20,30,42,54,66,78,90,102,114,126,138,150,162,174,186,196].map(x => (
+              <line key={x} x1={x} y1={106 + (x-0)*0.01} x2={x} y2={109 + (x-0)*0.01}
+                stroke="#888" strokeWidth="1.5" opacity="0.4" />
+            ))}
+            {/* Railway station icon */}
+            <rect x="88" y="100" width="16" height="10" rx="1.5" fill="#d4c898" />
+            <polygon points="88,100 96,95 104,100" fill="#c0b480" />
+            <text x="96" y="115" textAnchor="middle" fontSize="3" fill="#6b5840" opacity="0.8">Станция</text>
+
+            {/* District polygons */}
+            {GEO_DISTRICTS.map(d => {
               const val = metrics[d.metric] || 30;
               const cfg = METRICS_CFG[d.metric];
               const isHovered = hovered === d.id;
-              const opacity = 0.15 + (val / 100) * 0.5;
+              const baseOpacity = 0.18 + (val / 100) * 0.52;
+              const hasConstruction = activeProjects.some((_, i) => GEO_DISTRICTS[i % GEO_DISTRICTS.length]?.id === d.id);
               return (
-                <g key={d.id} onMouseEnter={() => setHovered(d.id)} onMouseLeave={() => setHovered(null)} style={{ cursor: "pointer" }}>
-                  <rect x={d.x} y={d.y} width={d.w} height={d.h} rx="2" ry="2"
-                    fill={cfg?.color || "#888"} opacity={opacity}
-                    stroke={isHovered ? cfg?.color || "#888" : "#e0e0e0"} strokeWidth={isHovered ? "0.8" : "0.3"} />
-                  <text x={d.x + d.w / 2} y={d.y + d.h / 2 - 1} textAnchor="middle" fontSize="3.5" fill="#191c1f" fontWeight="600">{d.emoji}</text>
-                  <text x={d.x + d.w / 2} y={d.y + d.h / 2 + 3.5} textAnchor="middle" fontSize="2" fill="#6b7280">{d.name}</text>
+                <g key={d.id}
+                  onMouseEnter={() => setHovered(d.id)}
+                  onMouseLeave={() => setHovered(null)}
+                  style={{ cursor: "pointer" }}>
+                  <path d={d.path}
+                    fill={cfg?.color || "#888"}
+                    opacity={isHovered ? Math.min(1, baseOpacity + 0.25) : baseOpacity}
+                    stroke={isHovered ? cfg?.color : "#fff"}
+                    strokeWidth={isHovered ? "1.2" : "0.6"}
+                    strokeOpacity={isHovered ? "0.9" : "0.5"} />
+                  {/* Emoji label */}
+                  <text x={d.labelX} y={d.labelY - 3.5} textAnchor="middle" fontSize="5" style={{ userSelect: "none" }}>{d.emoji}</text>
+                  {/* Name label (only when hovered or large enough) */}
+                  {isHovered && (
+                    <text x={d.labelX} y={d.labelY + 3} textAnchor="middle" fontSize="3" fill="#191c1f" fontWeight="700" opacity="0.95"
+                      style={{ filter: "drop-shadow(0 0 2px white)" }}>
+                      {d.name}
+                    </text>
+                  )}
+                  {/* Construction marker */}
+                  {hasConstruction && (
+                    <text x={d.labelX + 6} y={d.labelY - 8} textAnchor="middle" fontSize="5">🚧</text>
+                  )}
                 </g>
               );
             })}
-            {/* Active construction sites */}
-            {activeProjects.map((p, i) => {
-              const district = DISTRICT_MAP[i % DISTRICT_MAP.length];
-              return (
-                <g key={p.name}>
-                  <text x={district.x + district.w - 2} y={district.y + 3} fontSize="3" textAnchor="end">🚧</text>
-                </g>
-              );
-            })}
+
+            {/* Monastery landmark detail */}
+            <g opacity="0.7" style={{ pointerEvents: "none" }}>
+              <rect x="17" y="21" width="18" height="14" rx="1" fill="#ddd4b0" stroke="#b8a880" strokeWidth="0.4" />
+              <path d="M 23 21 Q 26 15 29 21 Z" fill="#507838" />
+              <path d="M 19 21 Q 21 17 23 21 Z" fill="#507838" />
+              <line x1="26" y1="14" x2="26" y2="11" stroke="#c8a850" strokeWidth="0.8" />
+              <line x1="24" y1="12" x2="28" y2="12" stroke="#c8a850" strokeWidth="0.5" />
+            </g>
+
+            {/* Kremlin landmark detail */}
+            <g opacity="0.7" style={{ pointerEvents: "none" }}>
+              <rect x="84" y="29" width="14" height="12" rx="1" fill="#ece4c8" stroke="#c8b898" strokeWidth="0.4" />
+              <path d="M 88 29 Q 91 22 94 29 Z" fill="#507838" />
+              <line x1="91" y1="21" x2="91" y2="18" stroke="#c8a850" strokeWidth="0.8" />
+              <line x1="89.5" y1="19" x2="92.5" y2="19" stroke="#c8a850" strokeWidth="0.5" />
+              <path d="M 85 29 Q 87 24 89 29 Z" fill="#4a7030" opacity="0.8" />
+            </g>
+
+            {/* Compass rose */}
+            <g transform="translate(185,12)" opacity="0.65">
+              <circle cx="0" cy="0" r="6" fill="white" opacity="0.6" />
+              <polygon points="0,-5 1.5,-1.5 0,-2 -1.5,-1.5" fill="#333" />
+              <polygon points="0,5 1.5,1.5 0,2 -1.5,1.5" fill="#888" />
+              <polygon points="-5,0 -1.5,-1.5 -2,0 -1.5,1.5" fill="#888" />
+              <polygon points="5,0 1.5,-1.5 2,0 1.5,1.5" fill="#888" />
+              <text x="0" y="-7" textAnchor="middle" fontSize="3.5" fontWeight="bold" fill="#333">С</text>
+            </g>
+
+            {/* Scale bar */}
+            <g transform="translate(8,148)" opacity="0.7">
+              <line x1="0" y1="0" x2="20" y2="0" stroke="#555" strokeWidth="1" />
+              <line x1="0" y1="-2" x2="0" y2="2" stroke="#555" strokeWidth="1" />
+              <line x1="20" y1="-2" x2="20" y2="2" stroke="#555" strokeWidth="1" />
+              <text x="10" y="-3" textAnchor="middle" fontSize="3" fill="#555">1 км</text>
+            </g>
           </svg>
         </div>
-        {/* Hovered district info */}
-        {hovered && (() => {
-          const d = DISTRICT_MAP.find(x => x.id === hovered);
-          const val = metrics[d.metric] || 30;
-          const cfg = METRICS_CFG[d.metric];
-          const districtBuilt = builtItems.filter(b => b.cat === d.metric).slice(0, 3);
+
+        {/* District info panel */}
+        {hoveredDistrict ? (() => {
+          const val = metrics[hoveredDistrict.metric] || 30;
+          const cfg = METRICS_CFG[hoveredDistrict.metric];
+          const districtBuilt = builtItems.filter(b => b.cat === hoveredDistrict.metric).slice(0, 4);
           return (
-            <div className="mt-2 p-3 rounded-xl bg-[#f7f7f7] border border-[#e0e0e0]">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-bold text-[#191c1f]">{d.emoji} {d.name}</span>
-                <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${cfg?.color}20`, color: cfg?.color }}>{cfg?.name}: {Math.round(val)}</span>
+            <div className="mt-3 p-3 rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] slide-up">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-bold text-[#191c1f]">{hoveredDistrict.emoji} {hoveredDistrict.name}</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold"
+                  style={{ backgroundColor: `${cfg?.color}20`, color: cfg?.color }}>
+                  {cfg?.name}: {Math.round(val)}
+                </span>
               </div>
-              {districtBuilt.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {districtBuilt.map(b => <span key={b.name} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#e8e8e8] text-[#6b7280]">{b.name} ×{b.count}</span>)}
+              <div className="w-full h-1.5 rounded-full overflow-hidden mb-2" style={{ backgroundColor: "rgba(0,0,0,0.06)" }}>
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${val}%`, backgroundColor: cfg?.color }} />
+              </div>
+              {districtBuilt.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {districtBuilt.map(b => (
+                    <span key={b.name} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#e8e8e8] text-[#6b7280]">{b.name} ×{b.count}</span>
+                  ))}
                 </div>
+              ) : (
+                <div className="text-[10px] text-[#9ca3af]">Пока нет построек в этом районе</div>
               )}
-              {districtBuilt.length === 0 && <div className="text-[10px] text-[#9ca3af]">Пока нет построек в этом районе</div>}
             </div>
           );
-        })()}
-        {/* Legend */}
-        <div className="mt-3 flex flex-wrap gap-2">
+        })() : (
+          <div className="mt-3 text-center text-xs text-[#9ca3af] py-2">Наведите на район для подробностей</div>
+        )}
+
+        {/* Metric legend */}
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5">
           {METRIC_KEYS.map(k => {
             const cfg = METRICS_CFG[k];
+            const val = Math.round(metrics[k]);
             return (
-              <div key={k} className="flex items-center gap-1 text-[10px]">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
-                <span className="text-[#6b7280]">{cfg.name}: {Math.round(metrics[k])}</span>
+              <div key={k} className="flex items-center gap-1.5 text-[10px]">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cfg.color, opacity: 0.2 + (val/100)*0.8 }} />
+                <span className="text-[#6b7280]">{cfg.name}</span>
+                <span className="font-bold text-[#191c1f]">{val}</span>
               </div>
             );
           })}
@@ -1869,6 +2317,8 @@ export default function ZvenigorodMayorSim() {
         .decision-selected { transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1); }
         .hover-lift { transition: transform 0.15s ease; }
         .hover-lift:hover { transform: translateY(-1px); }
+        @keyframes ob-fade-in { 0% { opacity:0; transform:translateY(14px); } 100% { opacity:1; transform:translateY(0); } }
+        .ob-step { animation: ob-fade-in 0.28s ease-out; }
       `}</style>
       {state.phase === "start" && <StartScreen onStart={(scenarioId, difficultyId) => dispatch({ type: "START_GAME", seed: Date.now(), scenarioId, difficultyId })} />}
       {state.phase === "crisis" && <CrisisPhase state={state} dispatch={dispatch} />}
