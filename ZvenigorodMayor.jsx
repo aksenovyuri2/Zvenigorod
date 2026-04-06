@@ -1,4 +1,4 @@
-import React, { useReducer, useEffect, useState, useRef, useCallback } from "react";
+import React, { useReducer, useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -144,43 +144,68 @@ function EffectBadge({ metricKey, value }) {
   );
 }
 
-function DecisionCard({ decision, selected, affordable, onToggle, usageCount, costMultiplier = 1, advisorComment }) {
+function DecisionCard({ decision, selected, affordable, onToggle, usageCount, costMultiplier = 1, advisorComment, index, metrics, onHover }) {
   const cost = Math.round(decision.cost * costMultiplier);
   const disabled = !affordable && !selected;
   const hasNeg = Object.values(decision.effects).some(v => v < 0);
+  const negCount = Object.values(decision.effects).filter(v => v < 0).length;
+  const posCount = Object.values(decision.effects).filter(v => v > 0).length;
+  const multiplier = usageCount > 0 ? Math.pow(0.7, usageCount) : 1;
+  // Risk assessment
+  const riskLevel = negCount >= 2 ? "high" : negCount === 1 ? "med" : "none";
+  const riskBorder = selected ? "border-[#4f55f1]" : disabled ? "border-[#ebebeb]" : riskLevel === "high" ? "border-[#ec7e00]/40" : "border-[#e0e0e0]";
+
   return (
-    <button onClick={() => !disabled && onToggle(decision.id)} disabled={disabled}
+    <button
+      onClick={() => !disabled && onToggle(decision.id)}
+      onMouseEnter={() => onHover && onHover(decision)}
+      onMouseLeave={() => onHover && onHover(null)}
+      disabled={disabled}
       title={disabled ? `Недостаточно бюджета (нужно ${cost} млн)` : ""}
-      className={`w-full text-left rounded-3xl p-3 border transition-all duration-200
+      className={`w-full text-left rounded-3xl p-3 border hover-lift
         ${selected
-          ? "border-[#4f55f1] bg-[#f7f7f7] shadow-md shadow-[#4f55f1]/10 scale-[1.01]"
+          ? `${riskBorder} bg-[#f7f7f7] shadow-md shadow-[#4f55f1]/10 scale-[1.01] decision-selected`
           : disabled
           ? "border-[#ebebeb] bg-[#f0f0f0] opacity-40 cursor-not-allowed"
-          : hasNeg
-          ? "border-[#e0e0e0] bg-[#f7f7f7] hover:border-[#c0c0c0] hover:shadow-sm cursor-pointer active:scale-[0.98]"
-          : "border-[#e0e0e0] bg-[#f7f7f7] hover:border-[#c0c0c0] hover:shadow-sm cursor-pointer active:scale-[0.98]"}`}>
+          : `${riskBorder} bg-[#f7f7f7] hover:border-[#c0c0c0] hover:shadow-sm cursor-pointer active:scale-[0.98]`}`}>
       <div className="flex items-start justify-between mb-1">
-        <h3 className="text-xs font-bold text-[#191c1f] leading-tight pr-2">{decision.name}</h3>
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          {index != null && <kbd className="hidden md:inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-mono bg-[#e8e8e8] text-[#9ca3af] shrink-0">{index + 1}</kbd>}
+          <h3 className="text-xs font-bold text-[#191c1f] leading-tight pr-2 truncate">{decision.name}</h3>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {riskLevel !== "none" && <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${riskLevel === "high" ? "bg-[#ec7e00]/10 text-[#ec7e00]" : "bg-[#f59e0b]/10 text-[#f59e0b]"}`}>{riskLevel === "high" ? "⚠" : "~"}</span>}
           <span className="text-sm font-semibold text-[#191c1f]">{cost}</span>
-          <span className="text-[10px] text-[#9ca3af] ml-0.5">млн</span>
+          <span className="text-[10px] text-[#9ca3af]">млн</span>
         </div>
       </div>
       <p className="text-[11px] text-[#6b7280] mb-1.5 leading-snug line-clamp-1">{decision.desc}</p>
       <div className="flex flex-wrap gap-1">
-        {Object.entries(decision.effects).map(([k, v]) => <EffectBadge key={k} metricKey={k} value={usageCount > 0 ? Math.round(v * Math.pow(0.7, usageCount)) : v} />)}
+        {Object.entries(decision.effects).map(([k, v]) => {
+          const eff = Math.round(v * multiplier);
+          const current = Math.round(metrics?.[k] || 0);
+          const after = Math.max(0, Math.min(100, current + eff));
+          return (
+            <span key={k} className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium group" style={{ backgroundColor: eff > 0 ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", color: eff > 0 ? "#16a34a" : "#dc2626" }}>
+              {React.createElement(METRICS_CFG[k]?.Icon || Building2, { size: 11 })}
+              <span>{eff > 0 ? "+" : ""}{eff}</span>
+              <span className="text-[9px] opacity-60 ml-0.5">{current}→{after}</span>
+            </span>
+          );
+        })}
         {decision.recurringIncome && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#e8e8e8] text-[#6b7280]">{decision.recurringIncome.base > 0 ? `+${decision.recurringIncome.base - decision.recurringIncome.maintenance}` : `-${decision.recurringIncome.maintenance}`}/ход</span>}
         {decision.populationEffect && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#e8e8e8] text-[#6b7280]"><Users size={10} />+{decision.populationEffect}</span>}
         {decision.once && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#e8e8e8] text-[#9ca3af]">Разовое</span>}
         {decision.requires && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#4f55f1]/10 text-[#4f55f1]">Цепочка</span>}
       </div>
-      {usageCount > 0 && <div className="mt-1.5 text-[10px] text-[#6b7280]">Эффект ×{Math.round(Math.pow(0.7, usageCount) * 100)}%</div>}
+      {usageCount > 0 && <div className="mt-1.5 text-[10px] text-[#6b7280]">Эффект ×{Math.round(multiplier * 100)}% (повторение #{usageCount})</div>}
       {advisorComment && advisorComment.map((c, i) => (
         <div key={i} className="mt-2 flex items-start gap-2 p-2 rounded-xl bg-[#f7f7f7] border border-[#ebebeb]">
           <span className="text-sm">{c.avatar}</span>
           <div><span className="text-[10px] text-[#9ca3af]">{c.advisor}:</span><p className="text-[10px] text-[#6b7280] italic leading-snug">{"\u00AB"}{c.text}{"\u00BB"}</p></div>
         </div>
       ))}
+      {selected && <div className="mt-1.5 flex items-center gap-1 text-[10px] text-[#4f55f1] font-semibold pop-in">✓ Выбрано</div>}
     </button>
   );
 }
@@ -501,10 +526,48 @@ function DecisionPhase({ state, dispatch }) {
   const term = turn < ELECTION_TURN ? 1 : 2;
   const termTurn = turn < ELECTION_TURN ? turn + 1 : turn - ELECTION_TURN + 1;
   const metricHistory = (mk) => state.history.map(h => h.metrics[mk]);
+  const [hoveredDecision, setHoveredDecision] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [confirmSkip, setConfirmSkip] = useState(false);
   // Notification dots
   const hasLetters = (state.npcLetters || []).length > 0 && (state.respondedLetters || []).length < (state.npcLetters || []).length;
   const hasProtests = (state.activeProtests || []).length > 0;
   const hasCritical = METRIC_KEYS.some(k => metrics[k] < 20);
+  // Projected metrics when hovering a decision
+  const projectedMetrics = useMemo(() => {
+    if (!hoveredDecision) return null;
+    const m = { ...metrics };
+    const mult = Math.pow(0.7, state.decisionHistory[hoveredDecision.id] || 0);
+    for (const [k, v] of Object.entries(hoveredDecision.effects)) m[k] = Math.max(0, Math.min(100, m[k] + Math.round(v * mult)));
+    return m;
+  }, [hoveredDecision, metrics, state.decisionHistory]);
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      if (isProcessing) return;
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= availableDecisions.length) {
+        const d = availableDecisions[num - 1];
+        if (d) dispatch({ type: "SELECT_DECISION", id: d.id });
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (selectedDecisions.length === 0) { setConfirmSkip(true); return; }
+        submitTurn();
+      }
+      if (e.key === "Escape") { setConfirmSkip(false); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [availableDecisions, selectedDecisions, isProcessing]);
+  const submitTurn = useCallback(() => {
+    setIsProcessing(true);
+    setTimeout(() => {
+      if (state.eventChoiceIndex != null) dispatch({ type: "SUBMIT_WITH_EVENT" });
+      else dispatch({ type: "SUBMIT_DECISIONS" });
+      setIsProcessing(false);
+    }, 400);
+  }, [state.eventChoiceIndex, dispatch]);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -541,8 +604,8 @@ function DecisionPhase({ state, dispatch }) {
         {/* Stats Bar */}
         <div className="flex items-center gap-3 px-4 py-1.5 mx-4 rounded-2xl bg-[#f7f7f7] border border-[#ebebeb] text-xs shrink-0">
           <div className="flex items-center gap-1">
-            <Coins size={13} className="text-[#ec7e00]" />
-            <span className="font-bold text-[#191c1f]">{Math.round(budget)}</span>
+            <Coins size={13} className={budget < 100 ? "text-[#e23b4a]" : budget < 300 ? "text-[#ec7e00]" : "text-[#ec7e00]"} />
+            <span className={`font-bold ${budget < 100 ? "text-[#e23b4a]" : budget < 300 ? "text-[#ec7e00]" : "text-[#191c1f]"}`}>{Math.round(budget)}</span>
             <span className="text-[#9ca3af]">млн</span>
           </div>
           <span className="text-[#9ca3af]">|</span>
@@ -577,15 +640,28 @@ function DecisionPhase({ state, dispatch }) {
                   const delta = v - pv;
                   const critical = v < 20;
                   const Icon = cfg.Icon;
+                  const proj = projectedMetrics ? Math.round(projectedMetrics[mk]) : null;
+                  const projDelta = proj !== null ? proj - v : 0;
                   return (
-                    <div key={mk} className="flex items-center gap-1.5 h-5" title={`${cfg.name}: ${v}`}>
+                    <div key={mk} className={`flex items-center gap-1.5 h-5 ${critical ? "pulse-critical" : ""}`} title={`${cfg.name}: ${v}${proj !== null && projDelta !== 0 ? ` → ${proj}` : ""}`}>
                       <Icon size={13} style={{ color: critical ? "#ef4444" : cfg.color }} />
-                      <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-[#e8e8e8]">
+                      <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-[#e8e8e8] relative">
                         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, v))}%`, backgroundColor: critical ? "#ef4444" : cfg.color }} />
+                        {proj !== null && projDelta !== 0 && (
+                          <div className="absolute top-0 h-full rounded-full transition-all duration-300 opacity-40" style={{
+                            left: projDelta > 0 ? `${Math.min(100, v)}%` : `${Math.max(0, proj)}%`,
+                            width: `${Math.abs(projDelta)}%`,
+                            backgroundColor: projDelta > 0 ? "#22c55e" : "#ef4444",
+                          }} />
+                        )}
                       </div>
                       <span className={`text-xs font-mono w-5 text-right ${critical ? "text-[#e23b4a] font-bold" : "text-[#191c1f]"}`}>{v}</span>
-                      {delta !== 0 && <span className={`text-xs w-5 text-right ${delta > 0 ? "text-[#00a87e]" : "text-[#e23b4a]"}`}>{delta > 0 ? "+" : ""}{delta}</span>}
-                      {critical && <span className="text-[#e23b4a] text-xs">!</span>}
+                      {proj !== null && projDelta !== 0 ? (
+                        <span className={`text-xs w-7 text-right font-bold ${projDelta > 0 ? "text-[#00a87e]" : "text-[#e23b4a]"}`}>{projDelta > 0 ? "+" : ""}{projDelta}</span>
+                      ) : delta !== 0 ? (
+                        <span className={`text-xs w-5 text-right ${delta > 0 ? "text-[#00a87e]" : "text-[#e23b4a]"}`}>{delta > 0 ? "+" : ""}{delta}</span>
+                      ) : <span className="w-5" />}
+                      {critical && <span className="text-[#e23b4a] text-xs">⚠</span>}
                     </div>
                   );
                 })}
@@ -937,30 +1013,75 @@ function DecisionPhase({ state, dispatch }) {
           </div>
 
           {/* Decisions */}
-          <div className="lg:col-span-8 flex flex-col overflow-hidden">
+          <div className={`lg:col-span-8 flex flex-col overflow-hidden relative ${isProcessing ? "pointer-events-none" : ""}`}>
+            {/* Processing overlay */}
+            {isProcessing && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm rounded-2xl">
+                <div className="flex flex-col items-center gap-2 pop-in">
+                  <div className="w-8 h-8 border-2 border-[#4f55f1] border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm font-medium text-[#191c1f]">Обработка решений...</span>
+                </div>
+              </div>
+            )}
+            {/* Skip turn confirmation */}
+            {confirmSkip && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 backdrop-blur-sm rounded-2xl pop-in">
+                <div className="bg-white rounded-2xl border border-[#e0e0e0] shadow-lg p-6 max-w-sm text-center">
+                  <div className="text-2xl mb-2">🤔</div>
+                  <h3 className="text-sm font-bold text-[#191c1f] mb-1">Пропустить ход?</h3>
+                  <p className="text-xs text-[#6b7280] mb-4">Вы не выбрали ни одного решения. Метрики продолжат падать без вмешательства.</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setConfirmSkip(false)} className="flex-1 py-2 text-sm font-medium rounded-full border-2 border-[#e0e0e0] text-[#191c1f] hover:border-[#191c1f] transition-colors">Назад</button>
+                    <button onClick={() => { setConfirmSkip(false); submitTurn(); }} className="flex-1 py-2 text-sm font-semibold rounded-full bg-[#191c1f] text-white hover:opacity-85 transition-opacity">Пропустить</button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-2 shrink-0">
-              <h2 className="text-sm font-bold text-[#191c1f]">Решения ({selectedDecisions.length} из {MAX_PICKS})</h2>
-              {totalCost > 0 && (
-                <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${budget - totalCost >= 0 ? "bg-[#e8e8e8] text-[#6b7280]" : "bg-[#e23b4a]/10 text-[#e23b4a]"}`}>
-                  После: {Math.round(budget - totalCost)} млн
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-[#191c1f]">Решения</h2>
+                <div className="flex gap-0.5">
+                  {Array.from({ length: MAX_PICKS }).map((_, i) => (
+                    <div key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${i < selectedDecisions.length ? "bg-[#4f55f1] scale-110" : "bg-[#e0e0e0]"}`} />
+                  ))}
+                </div>
+                <span className="text-[10px] text-[#9ca3af]">{selectedDecisions.length}/{MAX_PICKS}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {totalCost > 0 && (
+                  <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full transition-colors ${budget - totalCost >= 0 ? "bg-[#e8e8e8] text-[#6b7280]" : "bg-[#e23b4a]/10 text-[#e23b4a]"}`}>
+                    {Math.round(budget - totalCost)} млн
+                  </span>
+                )}
+                <span className="hidden md:inline text-[9px] text-[#c0c0c0]">1-{availableDecisions.length} выбрать · Enter ход</span>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {availableDecisions.map(d => {
+                {availableDecisions.map((d, i) => {
                   const cost = Math.round(d.cost * (costMultiplier||1));
                   const selected = selectedDecisions.includes(d.id);
                   const otherCost = totalCost - (selected ? cost : 0);
                   const affordable = (budget - otherCost - cost) >= -50;
-                  return <DecisionCard key={d.id} decision={d} selected={selected} affordable={affordable||selected} onToggle={id => dispatch({ type: "SELECT_DECISION", id })} usageCount={state.decisionHistory[d.id]||0} costMultiplier={costMultiplier||1} advisorComment={(advisorComments||{})[d.id]} />;
+                  return <DecisionCard key={d.id} decision={d} selected={selected} affordable={affordable||selected} onToggle={id => dispatch({ type: "SELECT_DECISION", id })} usageCount={state.decisionHistory[d.id]||0} costMultiplier={costMultiplier||1} advisorComment={(advisorComments||{})[d.id]} index={i} metrics={metrics} onHover={setHoveredDecision} />;
                 })}
               </div>
             </div>
             <div className="pt-2 shrink-0">
-              <button onClick={() => { if (state.eventChoiceIndex != null) dispatch({ type: "SUBMIT_WITH_EVENT" }); else dispatch({ type: "SUBMIT_DECISIONS" }); }}
-                className="w-full py-3 bg-[#191c1f] text-white font-semibold rounded-full transition-opacity text-base hover:opacity-85">
-                {selectedDecisions.length === 0 ? "Пропустить ход" : "Завершить ход"}{selectedDecisions.length > 0 && <span className="text-[#9ca3af] ml-2">(-{totalCost} млн)</span>}
+              <button onClick={() => {
+                  if (selectedDecisions.length === 0) { setConfirmSkip(true); return; }
+                  submitTurn();
+                }}
+                disabled={isProcessing}
+                className={`w-full py-3 font-semibold rounded-full text-base transition-all ${
+                  selectedDecisions.length > 0
+                    ? "bg-[#191c1f] text-white hover:opacity-85"
+                    : "bg-[#e8e8e8] text-[#6b7280] hover:bg-[#e0e0e0]"
+                }`}>
+                {selectedDecisions.length === 0
+                  ? "Пропустить ход"
+                  : <>Завершить ход<span className="text-[#9ca3af] ml-2">(-{totalCost} млн)</span></>
+                }
               </button>
             </div>
           </div>
@@ -1055,25 +1176,25 @@ function ResultsPhase({ state, dispatch }) {
       <FadeIn className="max-w-2xl w-full">
         <div className="rounded-3xl bg-[#f7f7f7] border border-[#e0e0e0] p-6 md:p-8">
           <div className="text-center mb-6">
-            <h2 className="text-xl font-bold text-[#191c1f] mb-1">Итоги Q{(turn - 1) % 4 + 1} {2025 + Math.floor((turn - 1) / 4)}</h2>
+            <h2 className="text-xl font-bold text-[#191c1f] mb-1 slide-up">Итоги Q{(turn - 1) % 4 + 1} {2025 + Math.floor((turn - 1) / 4)}</h2>
             <p className="text-sm text-[#6b7280]">Квартал {turn} из {MAX_TURNS}</p>
             <p className="text-sm text-[#191c1f] italic mt-2">{generateNarrative(state)}</p>
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-6">
-            <div className="text-center p-3 rounded-2xl bg-[#f0f0f0] border border-[#ebebeb]">
+            <div className={`text-center p-3 rounded-2xl bg-[#f0f0f0] border count-up ${prevRankIdx > globalRankIdx ? "border-[#4f55f1]/30 rank-glow" : prevRankIdx < globalRankIdx ? "border-[#e23b4a]/30" : "border-[#ebebeb]"}`}>
               <div className="text-xs text-[#6b7280] mb-1">Рейтинг</div>
-              <div className="text-2xl font-bold text-[#191c1f] font-bold">#{globalRankIdx + 1}</div>
+              <div className={`text-2xl font-bold ${prevRankIdx > globalRankIdx ? "text-[#4f55f1]" : "text-[#191c1f]"}`}>#{globalRankIdx + 1}</div>
               <DeltaValue value={prevRankIdx - globalRankIdx} />
             </div>
-            <div className="text-center p-3 rounded-2xl bg-[#f0f0f0] border border-[#ebebeb]">
+            <div className={`text-center p-3 rounded-2xl bg-[#f0f0f0] border count-up ${budget < 100 ? "border-[#e23b4a]/30" : "border-[#ebebeb]"}`} style={{ animationDelay: "0.1s" }}>
               <div className="text-xs text-[#6b7280] mb-1">Бюджет</div>
-              <div className="text-lg font-bold text-[#191c1f]">{Math.round(budget)}</div>
+              <div className={`text-lg font-bold ${budget < 100 ? "text-[#e23b4a]" : "text-[#191c1f]"}`}>{Math.round(budget)}</div>
               <DeltaValue value={Math.round(budget - prevBudget)} suffix=" млн" />
             </div>
-            <div className="text-center p-3 rounded-2xl bg-[#f0f0f0] border border-[#ebebeb]">
+            <div className={`text-center p-3 rounded-2xl bg-[#f0f0f0] border count-up ${approval < 30 ? "border-[#e23b4a]/30 shake" : approval >= 70 ? "border-[#00a87e]/30" : "border-[#ebebeb]"}`} style={{ animationDelay: "0.2s" }}>
               <div className="text-xs text-[#6b7280] mb-1">Одобрение</div>
-              <div className="text-lg font-bold text-[#191c1f] font-bold">{Math.round(approval)}%</div>
+              <div className={`text-lg font-bold ${approval < 30 ? "text-[#e23b4a]" : approval >= 70 ? "text-[#00a87e]" : "text-[#191c1f]"}`}>{Math.round(approval)}%</div>
               <DeltaValue value={Math.round(approval - (state.history.length >= 2 ? state.history[state.history.length - 2].approval : approval))} suffix="%" />
             </div>
           </div>
@@ -1385,9 +1506,9 @@ function EndScreen({ state, onRestart, onRestartFresh }) {
     <div className="min-h-screen px-4 py-8 md:py-12">
       <FadeIn className="max-w-3xl mx-auto">
         <div className="text-center rounded-3xl bg-[#f7f7f7] border border-[#e0e0e0] p-8 mb-6">
-          {state.defaulted && <div className="mb-4 px-4 py-2 inline-block rounded-full bg-[#e23b4a]/10 text-[#e23b4a] text-sm font-bold">💸 Дефолт! Город обанкротился.</div>}
+          {state.defaulted && <div className="mb-4 px-4 py-2 inline-block rounded-full bg-[#e23b4a]/10 text-[#e23b4a] text-sm font-bold shake">💸 Дефолт! Город обанкротился.</div>}
           {state.electionResult && !state.electionResult.won && <div className="mb-4 px-4 py-2 inline-block rounded-full bg-[#e23b4a]/10 text-[#e23b4a] text-sm font-bold">🗳️ Проиграли выборы.</div>}
-          <div className="text-8xl font-bold mb-2" style={{ color: grade.color }}>{grade.letter}</div>
+          <div className="text-8xl font-bold mb-2 pop-in" style={{ color: grade.color, animationDelay: "0.2s" }}>{grade.letter}</div>
           <div className="text-xl font-bold text-[#191c1f] mb-1">{grade.label}</div>
           <div className="text-[#6b7280]">Рейтинг: <span className="text-[#191c1f] font-bold">#{state.globalRankIdx + 1}</span> из {WORLD_CITIES.length + 1}</div>
           <div className="text-[#9ca3af] text-sm mt-1">Население: {state.population.toLocaleString("ru-RU")} | Стиль: {playStyle}</div>
@@ -1443,7 +1564,7 @@ function EndScreen({ state, onRestart, onRestartFresh }) {
                   <div className="flex-1 flex items-center gap-2">
                     <span className="text-xs text-[#9ca3af] w-8 text-right">{start}</span>
                     <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.06)" }}>
-                      <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${end}%`, backgroundColor: METRICS_CFG[k].color }} />
+                      <div className="h-full rounded-full bar-fill" style={{ width: `${end}%`, backgroundColor: METRICS_CFG[k].color, animationDelay: `${0.1 * METRIC_KEYS.indexOf(k)}s` }} />
                     </div>
                     <span className="text-sm font-bold text-[#191c1f] w-8">{end}</span>
                     <div className="w-12 text-right"><DeltaValue value={delta} /></div>
@@ -1505,6 +1626,24 @@ export default function ZvenigorodMayorSim() {
         ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
         @keyframes notif-ping { 0% { transform: scale(1); opacity:1; } 75% { transform: scale(1.8); opacity:0; } 100% { transform: scale(1); opacity:0; } }
         .notif-dot::after { content:''; position:absolute; inset:-1px; border-radius:9999px; animation: notif-ping 1.5s cubic-bezier(0,0,0.2,1) infinite; background: inherit; }
+        @keyframes pulse-critical { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+        .pulse-critical { animation: pulse-critical 1.5s ease-in-out infinite; }
+        @keyframes shake { 0%,100% { transform:translateX(0); } 10%,30%,50%,70%,90% { transform:translateX(-2px); } 20%,40%,60%,80% { transform:translateX(2px); } }
+        .shake { animation: shake 0.5s ease-in-out; }
+        @keyframes pop-in { 0% { transform:scale(0.8); opacity:0; } 50% { transform:scale(1.05); } 100% { transform:scale(1); opacity:1; } }
+        .pop-in { animation: pop-in 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+        @keyframes slide-up { 0% { transform:translateY(12px); opacity:0; } 100% { transform:translateY(0); opacity:1; } }
+        .slide-up { animation: slide-up 0.3s ease-out; }
+        @keyframes rank-glow { 0% { box-shadow: 0 0 0 0 rgba(79,85,241,0.4); } 70% { box-shadow: 0 0 0 10px rgba(79,85,241,0); } 100% { box-shadow: 0 0 0 0 rgba(79,85,241,0); } }
+        .rank-glow { animation: rank-glow 1s ease-out; }
+        @keyframes count-up { 0% { opacity:0; transform:translateY(8px); } 100% { opacity:1; transform:translateY(0); } }
+        .count-up { animation: count-up 0.4s ease-out; }
+        @keyframes bar-fill { 0% { width: 0%; } }
+        .bar-fill { animation: bar-fill 0.8s ease-out; }
+        @keyframes confetti-fall { 0% { transform: translateY(-10px) rotate(0deg); opacity:1; } 100% { transform: translateY(30px) rotate(360deg); opacity:0; } }
+        .decision-selected { transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1); }
+        .hover-lift { transition: transform 0.15s ease; }
+        .hover-lift:hover { transform: translateY(-1px); }
       `}</style>
       {state.phase === "start" && <StartScreen onStart={(scenarioId, difficultyId) => dispatch({ type: "START_GAME", seed: Date.now(), scenarioId, difficultyId })} />}
       {state.phase === "crisis" && <CrisisPhase state={state} dispatch={dispatch} />}
