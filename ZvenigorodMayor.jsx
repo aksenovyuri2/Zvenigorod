@@ -148,14 +148,15 @@ function DecisionCard({ decision, selected, affordable, onToggle, usageCount, co
   const hasNeg = Object.values(decision.effects).some(v => v < 0);
   return (
     <button onClick={() => !disabled && onToggle(decision.id)} disabled={disabled}
-      className={`w-full text-left rounded-3xl p-3 border transition-colors duration-200
+      title={disabled ? `Недостаточно бюджета (нужно ${cost} млн)` : ""}
+      className={`w-full text-left rounded-3xl p-3 border transition-all duration-200
         ${selected
-          ? "border-[#4f55f1] bg-[#f7f7f7]"
+          ? "border-[#4f55f1] bg-[#f7f7f7] shadow-md shadow-[#4f55f1]/10 scale-[1.01]"
           : disabled
           ? "border-[#ebebeb] bg-[#f0f0f0] opacity-40 cursor-not-allowed"
           : hasNeg
-          ? "border-[#e0e0e0] bg-[#f7f7f7] hover:border-[#c0c0c0] cursor-pointer"
-          : "border-[#e0e0e0] bg-[#f7f7f7] hover:border-[#c0c0c0] cursor-pointer"}`}>
+          ? "border-[#e0e0e0] bg-[#f7f7f7] hover:border-[#c0c0c0] hover:shadow-sm cursor-pointer active:scale-[0.98]"
+          : "border-[#e0e0e0] bg-[#f7f7f7] hover:border-[#c0c0c0] hover:shadow-sm cursor-pointer active:scale-[0.98]"}`}>
       <div className="flex items-start justify-between mb-1">
         <h3 className="text-xs font-bold text-[#191c1f] leading-tight pr-2">{decision.name}</h3>
         <div className="flex items-center gap-0.5 shrink-0">
@@ -336,18 +337,34 @@ function StartScreen({ onStart }) {
           <div className="flex gap-2">
             {Object.entries(DIFFICULTIES).map(([id, d]) => (
               <button key={id} onClick={() => setDifficultyId(id)}
-                className={`flex-1 px-3 py-2 rounded-full border text-sm font-medium transition-colors ${difficultyId === id ? "border-[#4f55f1] bg-[#4f55f1] text-white" : "border-[#e0e0e0] bg-[#f7f7f7] text-[#6b7280] hover:border-[#c0c0c0]"}`}>
+                className={`flex-1 px-3 py-2.5 rounded-full border text-sm font-medium transition-all active:scale-[0.95] ${difficultyId === id ? "border-[#4f55f1] bg-[#4f55f1] text-white shadow-md shadow-[#4f55f1]/20" : "border-[#e0e0e0] bg-[#f7f7f7] text-[#6b7280] hover:border-[#c0c0c0]"}`}>
                 {d.label}
               </button>
             ))}
           </div>
+          <p className="text-[11px] text-[#9ca3af] mt-2 text-center">
+            {difficultyId === "easy" && "💚 Больше бюджета, 3 решения за ход. Идеально для первого запуска."}
+            {difficultyId === "normal" && "⚖️ Стандартный баланс. 2 решения, обычный бюджет."}
+            {difficultyId === "hard" && "🔥 Меньше денег, быстрый износ. Для опытных мэров."}
+            {difficultyId === "hardcore" && "💀 Минимум ресурсов, 1 решение за ход. Удачи."}
+          </p>
         </div>
 
-        <button onClick={() => onStart(scenarioId, difficultyId)} className="inline-flex items-center gap-3 px-8 py-4 bg-[#191c1f] text-white font-semibold text-lg rounded-full transition-opacity hover:opacity-85">
+        {/* How to play */}
+        <div className="mb-8 max-w-md mx-auto rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-4">
+          <div className="grid grid-cols-4 gap-3 text-center">
+            <div><div className="text-2xl mb-1">📋</div><div className="text-[10px] text-[#6b7280] leading-tight">Принимайте решения каждый квартал</div></div>
+            <div><div className="text-2xl mb-1">📊</div><div className="text-[10px] text-[#6b7280] leading-tight">Следите за 8 метриками города</div></div>
+            <div><div className="text-2xl mb-1">🗳️</div><div className="text-[10px] text-[#6b7280] leading-tight">Пройдите выборы на 20-м ходу</div></div>
+            <div><div className="text-2xl mb-1">🏆</div><div className="text-[10px] text-[#6b7280] leading-tight">Поднимите город в мировом рейтинге</div></div>
+          </div>
+        </div>
+
+        <button onClick={() => onStart(scenarioId, difficultyId)} className="inline-flex items-center gap-3 px-8 py-4 bg-[#191c1f] text-white font-semibold text-lg rounded-full hover:opacity-90 active:scale-[0.97] transition-all shadow-lg">
           <Play size={22} />Начать игру
         </button>
-        <div className="mt-12 flex items-center gap-6 text-xs text-[#9ca3af] justify-center">
-          <span>Население: 25 000</span><span>Бюджет: 850 млн</span><span>40 ходов, 2 срока</span>
+        <div className="mt-8 flex items-center gap-6 text-xs text-[#9ca3af] justify-center">
+          <span>👥 25 000</span><span>💰 850 млн</span><span>📅 40 ходов</span><span>🗳️ 2 срока</span>
         </div>
       </FadeIn>
     </div>
@@ -423,7 +440,7 @@ function EventPhase({ event, onContinue, onChoice }) {
                 {event.population && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#e8e8e8] text-[#6b7280]"><Users size={12} />{event.population > 0 ? "+" : ""}{event.population}</span>}
                 {event.approval && <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${event.approval > 0 ? "bg-[#e8e8e8] text-[#191c1f]" : "bg-[#e8e8e8] text-[#e23b4a]"}`}><ThumbsUp size={12} />{event.approval > 0 ? "+" : ""}{event.approval}</span>}
               </div>
-              <button onClick={onContinue} className="w-full py-3 bg-[#191c1f] text-white font-semibold rounded-full transition-opacity hover:opacity-85">Продолжить</button>
+              <button onClick={onContinue} className="w-full py-3 bg-[#191c1f] text-white font-semibold rounded-full hover:opacity-90 active:scale-[0.97] transition-all">Продолжить</button>
             </>
           )}
           {event.choices && (
@@ -513,6 +530,7 @@ function DecisionPhase({ state, dispatch }) {
         </div>
 
         {costMultiplierTurns > 0 && <div className="mx-4 mt-1 px-4 py-1.5 rounded-full bg-[#f7f7f7] border border-[#e0e0e0] text-[#ec7e00] text-xs shrink-0">Цены на строительство +20% (осталось: {costMultiplierTurns})</div>}
+        {(state.seasonCostMod || 1) !== 1 && <div className={`mx-4 mt-1 px-4 py-1.5 rounded-full bg-[#f7f7f7] border border-[#e0e0e0] text-xs shrink-0 ${state.seasonCostMod > 1 ? "text-[#e23b4a]" : "text-[#00a87e]"}`}>{state.seasonCostMod > 1 ? "❄️ Зимняя наценка +15% на решения" : "☀️ Летняя скидка -5% на решения"}</div>}
         {debt > 500 && <div className="mx-4 mt-1 px-4 py-1.5 rounded-full border text-xs bg-[#f7f7f7] border-[#e0e0e0] text-[#e23b4a] shrink-0">Долг: {Math.round(debt)} млн (Штраф: -2 ко всем метрикам!)</div>}
         {METRIC_KEYS.some(k => metrics[k] < 20) && <div className="mx-4 mt-1 px-4 py-1.5 rounded-full bg-[#f7f7f7] border border-[#e0e0e0] text-[#e23b4a] text-xs flex items-center gap-2 shrink-0"><AlertTriangle size={14} />Критическая ситуация: {METRIC_KEYS.filter(k=>metrics[k]<20).map(k=>METRICS_CFG[k].name).join(", ")}</div>}
 
@@ -601,6 +619,7 @@ function DecisionPhase({ state, dispatch }) {
                     const letter = generateLetterText(npc, metrics);
                     if (!letter) return null;
                     const happy = letter.sentiment === "happy";
+                    const responded = (state.respondedLetters || []).includes(npc.id);
                     return (
                       <div key={i} className="rounded-xl p-2 text-xs bg-[#f0f0f0] border border-[#ebebeb]">
                         <div className="flex items-center gap-1.5 mb-0.5">
@@ -609,6 +628,19 @@ function DecisionPhase({ state, dispatch }) {
                           <span className="text-[#9ca3af] text-[10px] shrink-0">{npc.group}</span>
                         </div>
                         <p className={`italic leading-tight ${happy ? "text-[#00a87e]" : "text-[#e23b4a]"}`}>«{letter.text}»</p>
+                        {!responded && (
+                          <div className="flex gap-1.5 mt-1.5">
+                            <button onClick={() => dispatch({ type: "RESPOND_TO_LETTER", npcId: npc.id, positive: true })}
+                              className="flex-1 py-1 rounded-full bg-[#00a87e]/10 text-[#00a87e] text-[10px] font-semibold hover:bg-[#00a87e]/20 active:scale-[0.95] transition-all">
+                              👍 Поддержать
+                            </button>
+                            <button onClick={() => dispatch({ type: "RESPOND_TO_LETTER", npcId: npc.id, positive: false })}
+                              className="flex-1 py-1 rounded-full bg-[#e8e8e8] text-[#6b7280] text-[10px] font-semibold hover:bg-[#e0e0e0] active:scale-[0.95] transition-all">
+                              Отклонить
+                            </button>
+                          </div>
+                        )}
+                        {responded && <div className="mt-1 text-[10px] text-[#9ca3af]">✓ Ответ отправлен</div>}
                       </div>
                     );
                   })}
@@ -832,7 +864,14 @@ function DecisionPhase({ state, dispatch }) {
 
           {/* Decisions */}
           <div className="lg:col-span-8 flex flex-col overflow-hidden">
-            <h2 className="text-sm font-bold text-[#191c1f] mb-2 shrink-0">Решения ({selectedDecisions.length} из {MAX_PICKS})</h2>
+            <div className="flex items-center justify-between mb-2 shrink-0">
+              <h2 className="text-sm font-bold text-[#191c1f]">Решения ({selectedDecisions.length} из {MAX_PICKS})</h2>
+              {totalCost > 0 && (
+                <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${budget - totalCost >= 0 ? "bg-[#e8e8e8] text-[#6b7280]" : "bg-[#e23b4a]/10 text-[#e23b4a]"}`}>
+                  После: {Math.round(budget - totalCost)} млн
+                </span>
+              )}
+            </div>
             <div className="flex-1 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {availableDecisions.map(d => {
@@ -1022,7 +1061,7 @@ function ResultsPhase({ state, dispatch }) {
           )}
 
           <button onClick={() => dispatch({ type: "NEXT_TURN" })}
-            className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg flex items-center justify-center gap-2 hover:opacity-85 transition-opacity">
+            className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.97] transition-all">
             {turn >= MAX_TURNS || state.defaulted ? "Результаты" : turn === ELECTION_TURN ? "К выборам!" : "Следующий квартал"}<ArrowRight size={20} />
           </button>
         </div>
@@ -1071,7 +1110,7 @@ function ElectionCampaign({ state, dispatch }) {
           </div>
 
           <button onClick={() => dispatch({ type: "START_ELECTION" })} disabled={promiseIdx === null}
-            className="w-full py-4 bg-[#191c1f] text-white disabled:bg-[#e8e8e8] disabled:text-[#9ca3af] font-semibold rounded-full text-lg hover:opacity-85 transition-opacity">
+            className="w-full py-4 bg-[#191c1f] text-white disabled:bg-[#e8e8e8] disabled:text-[#9ca3af] font-semibold rounded-full text-lg hover:opacity-90 active:scale-[0.97] transition-all">
             Начать подсчёт голосов
           </button>
         </div>
@@ -1128,7 +1167,7 @@ function ElectionVote({ state, dispatch }) {
               <div className={`text-3xl font-bold mb-4 ${won ? "text-[#00a87e]" : "text-[#e23b4a]"}`}>{won ? "\uD83C\uDF89 Вы переизбраны!" : "\uD83D\uDE14 Вы проиграли"}</div>
               <p className="text-sm text-[#6b7280] mb-6">{won ? "Жители доверили вам ещё 5 лет. Не подведите!" : `Жители выбрали ${opponent.name} новым мэром.`}</p>
               <button onClick={() => { if (won) dispatch({ type: "START_SECOND_TERM" }); else dispatch({ type: "NEXT_TURN" }); }}
-                className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg hover:opacity-85 transition-opacity">
+                className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg hover:opacity-90 active:scale-[0.97] transition-all">
                 {won ? "Начать второй срок" : "Посмотреть итоги"}
               </button>
             </FadeIn>
@@ -1237,7 +1276,7 @@ function ElectionLossScreen({ state, dispatch }) {
           <div className="flex flex-col gap-3">
             <button
               onClick={() => dispatch({ type: "RESTART" })}
-              className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg flex items-center justify-center gap-2 transition-opacity hover:opacity-85"
+              className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.97] transition-all"
             >
               <RotateCcw size={20} />Играть снова
             </button>
@@ -1272,23 +1311,49 @@ function EndScreen({ state, onRestart }) {
     <div className="min-h-screen px-4 py-8 md:py-12">
       <FadeIn className="max-w-3xl mx-auto">
         <div className="text-center rounded-3xl bg-[#f7f7f7] border border-[#e0e0e0] p-8 mb-6">
-          {state.defaulted && <div className="mb-4 px-4 py-2 inline-block rounded-full bg-[#e8e8e8] text-[#e23b4a] text-sm font-bold">Дефолт! Город обанкротился.</div>}
-          {state.electionResult && !state.electionResult.won && <div className="mb-4 px-4 py-2 inline-block rounded-full bg-[#e8e8e8] text-[#e23b4a] text-sm font-bold">Проиграл выборы.</div>}
+          {state.defaulted && <div className="mb-4 px-4 py-2 inline-block rounded-full bg-[#e23b4a]/10 text-[#e23b4a] text-sm font-bold">💸 Дефолт! Город обанкротился.</div>}
+          {state.electionResult && !state.electionResult.won && <div className="mb-4 px-4 py-2 inline-block rounded-full bg-[#e23b4a]/10 text-[#e23b4a] text-sm font-bold">🗳️ Проиграли выборы.</div>}
           <div className="text-8xl font-bold mb-2" style={{ color: grade.color }}>{grade.letter}</div>
           <div className="text-xl font-bold text-[#191c1f] mb-1">{grade.label}</div>
           <div className="text-[#6b7280]">Рейтинг: <span className="text-[#191c1f] font-bold">#{state.globalRankIdx + 1}</span> из {WORLD_CITIES.length + 1}</div>
           <div className="text-[#9ca3af] text-sm mt-1">Население: {state.population.toLocaleString("ru-RU")} | Стиль: {playStyle}</div>
+
+          {/* Narrative summary */}
+          <div className="mt-4 text-sm text-[#6b7280] leading-relaxed max-w-lg mx-auto">
+            {state.defaulted
+              ? "Бюджет Звенигорода не выдержал. В следующий раз попробуйте снизить налоги для роста экономики или выбрать менее затратные проекты."
+              : state.globalRankIdx < 15
+              ? `Выдающийся результат! Звенигород стал одним из лучших городов мира. Ваш стиль «${playStyle}» вошёл в историю.`
+              : state.globalRankIdx < 50
+              ? `Хорошее правление! Звенигород вырос и окреп. Попробуйте другой сценарий, чтобы войти в топ-15.`
+              : `Город пережил ваше правление, но потенциал не раскрыт. Сбалансируйте метрики и следите за бюджетом — и рейтинг пойдёт вверх.`
+            }
+          </div>
         </div>
 
         {/* Achievements */}
-        {state.achievements.length > 0 && (
-          <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-6 mb-6">
-            <h3 className="text-sm font-bold text-[#191c1f] mb-3 flex items-center gap-2"><Trophy size={16} className="text-[#ec7e00]" />Достижения</h3>
-            <div className="flex flex-wrap gap-3">
-              {state.achievements.map(id => { const a = ACHIEVEMENTS.find(x => x.id === id); return a ? <div key={id} className="px-3 py-2 rounded-full bg-[#e8e8e8] border border-[#e0e0e0] text-sm text-[#191c1f]"><span className="mr-1">{a.icon}</span>{a.name}</div> : null; })}
-            </div>
+        <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-6 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-[#191c1f] flex items-center gap-2"><Trophy size={16} className="text-[#ec7e00]" />Достижения</h3>
+            <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-[#e8e8e8] text-[#6b7280]">{state.achievements.length} / {ACHIEVEMENTS.length}</span>
           </div>
-        )}
+          {state.achievements.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {state.achievements.map(id => { const a = ACHIEVEMENTS.find(x => x.id === id); return a ? <div key={id} className="px-3 py-1.5 rounded-full bg-[#4f55f1]/10 border border-[#4f55f1]/20 text-sm text-[#191c1f] font-medium"><span className="mr-1">{a.icon}</span>{a.name}</div> : null; })}
+            </div>
+          ) : (
+            <p className="text-sm text-[#9ca3af]">Пока нет разблокированных достижений</p>
+          )}
+          {/* Locked achievements hint */}
+          {state.achievements.length < ACHIEVEMENTS.length && (
+            <div className="flex flex-wrap gap-1.5">
+              {ACHIEVEMENTS.filter(a => !state.achievements.includes(a.id)).slice(0, 4).map(a => (
+                <span key={a.id} className="px-2.5 py-1 rounded-full bg-[#f0f0f0] border border-[#ebebeb] text-xs text-[#9ca3af]">🔒 {a.name}</span>
+              ))}
+              {ACHIEVEMENTS.length - state.achievements.length > 4 && <span className="px-2 py-1 text-xs text-[#9ca3af]">+{ACHIEVEMENTS.length - state.achievements.length - 4} ещё</span>}
+            </div>
+          )}
+        </div>
 
         <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-6 mb-6">
           <h3 className="text-sm font-bold text-[#191c1f] mb-4">Сравнение метрик</h3>
@@ -1318,11 +1383,11 @@ function EndScreen({ state, onRestart }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-4">
             <h3 className="text-sm font-bold text-[#191c1f] mb-3">Рейтинг</h3>
-            <div className="h-48"><ResponsiveContainer width="100%" height="100%"><LineChart data={rankData}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" /><XAxis dataKey="turn" tick={{ fill:"#64748b", fontSize:10 }} /><YAxis reversed tick={{ fill:"#64748b", fontSize:10 }} /><RTooltip contentStyle={{ backgroundColor:"#19191a", border:"1px solid #3b3b3d", borderRadius:"12px" }} /><Line type="monotone" dataKey="rank" stroke="#4f55f1" strokeWidth={2} dot={{ r:2, fill:"#4f55f1" }} name="Позиция" /></LineChart></ResponsiveContainer></div>
+            <div className="h-48"><ResponsiveContainer width="100%" height="100%"><LineChart data={rankData}><CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" /><XAxis dataKey="turn" tick={{ fill:"#64748b", fontSize:10 }} /><YAxis reversed tick={{ fill:"#64748b", fontSize:10 }} /><RTooltip contentStyle={{ backgroundColor:"#fff", border:"1px solid #e0e0e0", borderRadius:"12px", boxShadow:"0 4px 12px rgba(0,0,0,0.08)" }} /><Line type="monotone" dataKey="rank" stroke="#4f55f1" strokeWidth={2} dot={{ r:2, fill:"#4f55f1" }} name="Позиция" /></LineChart></ResponsiveContainer></div>
           </div>
           <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-4">
             <h3 className="text-sm font-bold text-[#191c1f] mb-3">Население</h3>
-            <div className="h-48"><ResponsiveContainer width="100%" height="100%"><LineChart data={popData}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" /><XAxis dataKey="turn" tick={{ fill:"#64748b", fontSize:10 }} /><YAxis tick={{ fill:"#64748b", fontSize:10 }} /><RTooltip contentStyle={{ backgroundColor:"#19191a", border:"1px solid #3b3b3d", borderRadius:"12px" }} /><Line type="monotone" dataKey="pop" stroke="#06b6d4" strokeWidth={2} dot={{ r:2, fill:"#06b6d4" }} name="Население" /></LineChart></ResponsiveContainer></div>
+            <div className="h-48"><ResponsiveContainer width="100%" height="100%"><LineChart data={popData}><CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" /><XAxis dataKey="turn" tick={{ fill:"#64748b", fontSize:10 }} /><YAxis tick={{ fill:"#64748b", fontSize:10 }} /><RTooltip contentStyle={{ backgroundColor:"#fff", border:"1px solid #e0e0e0", borderRadius:"12px", boxShadow:"0 4px 12px rgba(0,0,0,0.08)" }} /><Line type="monotone" dataKey="pop" stroke="#06b6d4" strokeWidth={2} dot={{ r:2, fill:"#06b6d4" }} name="Население" /></LineChart></ResponsiveContainer></div>
           </div>
         </div>
 
@@ -1338,7 +1403,7 @@ function EndScreen({ state, onRestart }) {
           </div>
         </div>
 
-        <button onClick={onRestart} className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg flex items-center justify-center gap-2 hover:opacity-85 transition-opacity"><RotateCcw size={20} />Играть снова</button>
+        <button onClick={onRestart} className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.97] transition-all"><RotateCcw size={20} />Играть снова</button>
       </FadeIn>
     </div>
   );

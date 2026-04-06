@@ -256,6 +256,9 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   metrics = applySeason(metrics, state.turn);
 
   // ── 3. Apply decisions ──
+  // Season affects construction costs: winter +15%, summer -5%
+  const nextTurnSeason = (state.turn + 1) % 4; // 0=winter, 1=spring, 2=summer, 3=autumn
+  const seasonCostMod = nextTurnSeason === 0 ? 1.15 : nextTurnSeason === 2 ? 0.95 : 1.0;
   let budget = state.budget + eventBudget;
   let population = state.population + eventPopulation;
   const newDecisionHistory = { ...state.decisionHistory };
@@ -277,7 +280,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
       budget -= project.costPerTurn;
     } else {
       for (const [k, v] of Object.entries(dec.effects)) metrics[k] = (metrics[k] || 0) + v * multiplier;
-      budget -= Math.round(dec.cost * (newCostMultiplier || 1));
+      budget -= Math.round(dec.cost * (newCostMultiplier || 1) * seasonCostMod);
     }
 
     if (dec.recurringIncome) newRecurringIncomes = [...newRecurringIncomes, { ...dec.recurringIncome, startTurn: state.turn + 1, decisionId: dec.id }];
@@ -560,6 +563,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
     activeCrisis: newActiveCrisis, resolvedCrises: newResolvedCrises, crisisActionChosen: false,
     neighborRelations: newNeighborRelations, diplomaticResults: [], completedJointProjects: newCompletedJointProjects,
     activeProtests: newActiveProtests, approvalHistory, exiled, resolvedProtests: newResolvedProtests,
+    seasonCostMod, respondedLetters: [],
   };
 }
 
@@ -678,6 +682,25 @@ export function gameReducer(state, action) {
     }
     case "ELECTION_LOSS_END":
       return { ...state, phase: "end" };
+    case "RESPOND_TO_LETTER": {
+      // Player responds to NPC letter — small approval & satisfaction boost
+      const { npcId, positive } = action;
+      const npc = (state.npcs || []).find(n => n.id === npcId);
+      if (!npc) return state;
+      const approvalDelta = positive ? 1.5 : -0.5;
+      const satDelta = positive ? 3 : -2;
+      const newNpcs = state.npcs.map(n =>
+        n.id === npcId ? { ...n, satisfaction: Math.max(0, Math.min(100, n.satisfaction + satDelta)), respondedThisTurn: true } : n
+      );
+      const responded = [...(state.respondedLetters || []), npcId];
+      return {
+        ...state,
+        npcs: newNpcs,
+        approval: Math.max(0, Math.min(100, state.approval + approvalDelta)),
+        respondedLetters: responded,
+        news: [...(state.news || []), positive ? `Мэр ответил на письмо ${npc.shortName || npc.firstName}` : `Мэр отказал ${npc.shortName || npc.firstName}`],
+      };
+    }
     case "RESTART_FRESH":
       return { ...createInitialState(Date.now()), phase: "start" };
     case "RESTART":
