@@ -9,6 +9,19 @@ export function getDailySeed(date) {
   return Math.abs(hash) || 42;
 }
 
+export function getWeeklySeed(date) {
+  const d = date || new Date();
+  const start = new Date(d.getFullYear(), 0, 1);
+  const weekNum = Math.ceil(((d - start) / 86400000 + start.getDay() + 1) / 7);
+  const str = `week-${d.getFullYear()}-${weekNum}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash) || 77;
+}
+
 export function createRNG(seed) {
   let s = seed % 2147483647;
   if (s <= 0) s += 2147483646;

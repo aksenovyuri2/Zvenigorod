@@ -7,7 +7,7 @@ import {
   TrendingUp, Users, Coins, AlertTriangle, Play, ArrowRight,
   RotateCcw, ChevronDown, ChevronUp, MapPin, Crown, Vote,
   Trophy, Snowflake, Sun, Leaf, CloudRain, MessageCircle, X,
-  Award, Zap, Globe, ThumbsUp, Info, Newspaper,
+  Award, Zap, Globe, ThumbsUp, Info, Newspaper, Settings,
   Bug, Skull, Megaphone, Waves, ShieldAlert, UserMinus,
   Landmark, Briefcase, HelpCircle, Rocket,
   PanelLeftClose, PanelLeftOpen, Star, Sparkles, Map,
@@ -17,8 +17,8 @@ import {
 import {
   gameReducer, createInitialState,
   METRIC_KEYS, METRICS_CFG as METRICS_CFG_RAW, GROUPS, MAX_TURNS, MAX_PICKS, ELECTION_TURN, INIT_POP,
-  ALL_DECISIONS, ALL_EVENTS, ACHIEVEMENTS, ELECTION_PROMISES, WORLD_CITIES, RIVAL_CITIES,
-  DIFFICULTIES, SCENARIOS,
+  ALL_DECISIONS, ALL_EVENTS, ACHIEVEMENTS, ELECTION_PROMISES, WORLD_CITIES, RIVAL_CITIES, STORY_CHARACTERS,
+  DIFFICULTIES, SCENARIOS, WEEKLY_SCENARIOS,
   getGrade as getGradeEngine, getPlayStyle as getPlayStyleEngine,
   calcGroupSatisfactions, calcAvgSatisfaction,
 } from "./src/engine/gameLoop.js";
@@ -28,8 +28,8 @@ import { generateLetterText } from "./src/npc/npcEngine.js";
 import { NEIGHBORS, DIPLOMATIC_ACTIONS, JOINT_PROJECTS } from "./src/political/diplomacy.js";
 import { FACTIONS } from "./src/political/dumaEngine.js";
 import { getResultNarrative } from "./src/engine/scoring.js";
-import { getDailySeed } from "./src/engine/random.js";
-import { getLegacyState, addLegacyPoints, unlockLegacy, applyLegacyBonuses, LEGACY_TREE, isFirstRun } from "./src/engine/legacy.js";
+import { getDailySeed, getWeeklySeed } from "./src/engine/random.js";
+import { getLegacyState, addLegacyPoints, unlockLegacy, applyLegacyBonuses, LEGACY_TREE, isFirstRun, getStreak, updateStreak, getStreakMultiplier, getWeeklyResult, saveWeeklyResult } from "./src/engine/legacy.js";
 import { audio } from "./src/audio/audioEngine.js";
 
 // Icon mapping: string keys from engine to React components
@@ -74,6 +74,111 @@ function getPlayStyle(history) {
 // UI HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function Tooltip({ children, text }) {
+  if (!text) return children;
+  return (
+    <div className="relative group/tip">
+      {children}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tip:block z-30 pointer-events-none">
+        <div className="bg-[#191c1f] text-white text-[10px] rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg max-w-48 text-center leading-tight">{text}</div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsPanel({ onClose }) {
+  const [audioOn, setAudioOn] = useState(() => typeof window !== "undefined" && localStorage.getItem("zvg_audio") !== "off");
+  const [reducedMotion, setReducedMotion] = useState(() => typeof window !== "undefined" && localStorage.getItem("zvg_reduced_motion") === "on");
+  const [fontSize, setFontSize] = useState(() => typeof window !== "undefined" && localStorage.getItem("zvg_fontsize") || "normal");
+
+  const toggle = (key, val, setter, storageKey) => {
+    setter(val);
+    localStorage.setItem(storageKey, val ? "on" : "off");
+    if (storageKey === "zvg_audio") {
+      import("./src/audio/audioEngine.js").then(m => m.setAudioEnabled(val));
+      localStorage.setItem(storageKey, val ? "on" : "off");
+    }
+    if (storageKey === "zvg_reduced_motion") {
+      document.documentElement.classList.toggle("reduced-motion", val);
+    }
+  };
+
+  const setSize = (size) => {
+    setFontSize(size);
+    localStorage.setItem("zvg_fontsize", size);
+    document.documentElement.style.fontSize = size === "large" ? "18px" : "";
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-4 p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-bold text-[#191c1f]">Настройки</h2>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-[#f0f0f0] transition-colors"><X size={18} /></button>
+        </div>
+        <div className="space-y-4">
+          <label className="flex items-center justify-between">
+            <span className="text-sm text-[#191c1f]">🔊 Звук</span>
+            <button onClick={() => toggle("audio", !audioOn, setAudioOn, "zvg_audio")}
+              className={`w-11 h-6 rounded-full transition-colors ${audioOn ? "bg-[#4f55f1]" : "bg-[#c0c0c0]"}`}>
+              <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${audioOn ? "translate-x-5.5" : "translate-x-0.5"}`} style={{ transform: `translateX(${audioOn ? 22 : 2}px)` }} />
+            </button>
+          </label>
+          <label className="flex items-center justify-between">
+            <span className="text-sm text-[#191c1f]">✨ Упрощённые анимации</span>
+            <button onClick={() => toggle("motion", !reducedMotion, setReducedMotion, "zvg_reduced_motion")}
+              className={`w-11 h-6 rounded-full transition-colors ${reducedMotion ? "bg-[#4f55f1]" : "bg-[#c0c0c0]"}`}>
+              <div className="w-5 h-5 bg-white rounded-full shadow" style={{ transform: `translateX(${reducedMotion ? 22 : 2}px)`, transition: "transform 0.15s" }} />
+            </button>
+          </label>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#191c1f]">🔤 Размер шрифта</span>
+            <div className="flex gap-1">
+              {[["normal","A"],["large","A+"]].map(([size, label]) => (
+                <button key={size} onClick={() => setSize(size)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${fontSize === size ? "bg-[#4f55f1] text-white" : "bg-[#e8e8e8] text-[#6b7280]"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mt-5 pt-4 border-t border-[#e0e0e0] text-center">
+          <p className="text-[10px] text-[#9ca3af]">Нажмите <kbd className="px-1.5 py-0.5 bg-[#f0f0f0] rounded text-[#6b7280] font-mono">?</kbd> для горячих клавиш</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KeyboardShortcutsOverlay({ onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-4 p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-[#191c1f]">Горячие клавиши</h2>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-[#f0f0f0] transition-colors"><X size={18} /></button>
+        </div>
+        <div className="space-y-2 text-sm">
+          {[
+            ["1-8","Выбрать решение"],
+            ["Enter","Подтвердить ход"],
+            ["Space","Продолжить / Далее"],
+            ["?","Горячие клавиши"],
+            ["S","Настройки"],
+            ["Esc","Закрыть модальное окно"],
+          ].map(([key, desc]) => (
+            <div key={key} className="flex items-center justify-between">
+              <span className="text-[#6b7280]">{desc}</span>
+              <kbd className="px-2 py-0.5 bg-[#f0f0f0] rounded text-[#191c1f] font-mono text-xs border border-[#e0e0e0]">{key}</kbd>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DeltaValue({ value, suffix = "" }) {
   if (!value || value === 0) return null;
   const pos = value > 0;
@@ -87,22 +192,24 @@ function MetricBar({ metricKey, value, prevValue, compact = false }) {
   const pct = Math.max(0, Math.min(100, value));
   const critical = value < 20;
   return (
-    <div className={compact ? "mb-1.5" : "mb-3"}>
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-1.5">
-          <cfg.Icon size={compact ? 14 : 16} style={{ color: cfg.color }} />
-          <span className={`${compact ? "text-xs" : "text-sm"} text-[#191c1f]`}>{cfg.name}</span>
-          {critical && <span className="text-[#e23b4a] animate-pulse text-xs">!</span>}
+    <Tooltip text={cfg.desc}>
+      <div className={compact ? "mb-1.5" : "mb-3"}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-1.5">
+            <cfg.Icon size={compact ? 14 : 16} style={{ color: cfg.color }} />
+            <span className={`${compact ? "text-xs" : "text-sm"} text-[#191c1f]`}>{cfg.name}</span>
+            {critical && <span className="text-[#e23b4a] animate-pulse text-xs">!</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`${compact ? "text-xs" : "text-sm"} font-bold text-[#191c1f]`}>{Math.round(value)}</span>
+            {delta !== 0 && <DeltaValue value={delta} />}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`${compact ? "text-xs" : "text-sm"} font-bold text-[#191c1f]`}>{Math.round(value)}</span>
-          {delta !== 0 && <DeltaValue value={delta} />}
+        <div className={`w-full rounded-full overflow-hidden ${compact ? "h-1.5" : "h-2"}`} style={{ backgroundColor: "rgba(0,0,0,0.06)" }}>
+          <div className="h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${pct}%`, backgroundColor: critical ? "#ef4444" : cfg.color }} />
         </div>
       </div>
-      <div className={`w-full rounded-full overflow-hidden ${compact ? "h-1.5" : "h-2"}`} style={{ backgroundColor: "rgba(0,0,0,0.06)" }}>
-        <div className="h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${pct}%`, backgroundColor: critical ? "#ef4444" : cfg.color }} />
-      </div>
-    </div>
+    </Tooltip>
   );
 }
 
@@ -159,19 +266,29 @@ function DecisionCard({ decision, selected, affordable, onToggle, usageCount, co
   const riskLevel = negCount >= 2 ? "high" : negCount === 1 ? "med" : "none";
   const riskBorder = selected ? "border-[#4f55f1]" : disabled ? "border-[#ebebeb]" : riskLevel === "high" ? "border-[#ec7e00]/40" : "border-[#e0e0e0]";
 
+  const [ripple, setRipple] = useState(null);
+  const handleClick = (e) => {
+    if (disabled) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setRipple({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    setTimeout(() => setRipple(null), 500);
+    onToggle(decision.id);
+  };
+
   return (
     <button
-      onClick={() => !disabled && onToggle(decision.id)}
+      onClick={handleClick}
       onMouseEnter={() => onHover && onHover(decision)}
       onMouseLeave={() => onHover && onHover(null)}
       disabled={disabled}
       title={disabled ? `Недостаточно бюджета (нужно ${cost} млн)` : ""}
-      className={`w-full text-left rounded-3xl p-3 border hover-lift
+      className={`w-full text-left rounded-3xl p-3 border hover-lift overflow-hidden relative
         ${selected
-          ? `${riskBorder} bg-[#f7f7f7] shadow-md shadow-[#4f55f1]/10 scale-[1.01] decision-selected`
+          ? `${riskBorder} bg-[#f7f7f7] shadow-md shadow-[#4f55f1]/10 scale-[1.01] decision-selected pop-in`
           : disabled
           ? "border-[#ebebeb] bg-[#f0f0f0] opacity-40 cursor-not-allowed"
           : `${riskBorder} bg-[#f7f7f7] hover:border-[#c0c0c0] hover:shadow-sm cursor-pointer active:scale-[0.98]`}`}>
+      {ripple && <span className="absolute rounded-full bg-[#4f55f1]/10 pointer-events-none" style={{ left: ripple.x - 30, top: ripple.y - 30, width: 60, height: 60, animation: "ripple-out 0.5s ease-out forwards" }} />}
       <div className="flex items-start justify-between mb-1">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           {index != null && <kbd className="hidden md:inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-mono bg-[#e8e8e8] text-[#9ca3af] shrink-0">{index + 1}</kbd>}
@@ -237,12 +354,14 @@ function NewsBar({ news }) {
 }
 
 function AchievementToast({ achievements }) {
+  const [showConfetti, setShowConfetti] = useState(false);
   useEffect(() => {
-    if (achievements && achievements.length > 0) audio.achievement();
+    if (achievements && achievements.length > 0) { audio.achievement(); setShowConfetti(true); }
   }, [achievements]);
   if (!achievements || !achievements.length) return null;
   return (
     <div className="fixed top-4 right-4 z-50 space-y-2">
+      {showConfetti && <ConfettiBurst onDone={() => setShowConfetti(false)} />}
       {achievements.map(id => {
         const a = ACHIEVEMENTS.find(x => x.id === id);
         if (!a) return null;
@@ -261,12 +380,76 @@ function AchievementToast({ achievements }) {
   );
 }
 
+const CONFETTI_COLORS = ["#fbbf24","#22c55e","#4f55f1","#ef4444","#ec4899","#3b82f6","#f97316"];
+function ConfettiBurst({ onDone }) {
+  useEffect(() => { const t = setTimeout(() => onDone && onDone(), 1400); return () => clearTimeout(t); }, []);
+  const particles = useMemo(() => Array.from({ length: 25 }, (_, i) => ({
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    cx: `${(Math.random() - 0.5) * 20}px`,
+    ex: `${(Math.random() - 0.5) * 160}px`,
+    ey: `${-40 - Math.random() * 120}px`,
+    er: `${(Math.random() - 0.5) * 720}deg`,
+    delay: `${Math.random() * 0.15}s`,
+    size: 4 + Math.random() * 4,
+  })), []);
+  return (
+    <div className="fixed inset-0 z-[60] pointer-events-none flex items-center justify-center">
+      {particles.map((p, i) => (
+        <span key={i} className="confetti-particle absolute rounded-sm" style={{
+          width: p.size, height: p.size, backgroundColor: p.color,
+          "--cx": p.cx, "--ex": p.ex, "--ey": p.ey, "--er": p.er,
+          animationDelay: p.delay,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+const TUTORIAL_STEPS = [
+  { step: 1, title: "Добро пожаловать!", text: "Это панель метрик вашего города. Следите за 8 показателями — от инфраструктуры до экономики.", highlight: "metrics" },
+  { step: 1, title: "Выберите решения", text: "Каждый квартал выбирайте до 2 решений. Каждое стоит денег и влияет на метрики.", highlight: "decisions" },
+  { step: 2, title: "Следите за бюджетом", text: "Если бюджет уйдёт в минус — начнёт расти долг. Доходы зависят от экономики и населения.", highlight: "budget" },
+  { step: 3, title: "Рейтинг одобрения", text: "Если одобрение упадёт ниже 30% — проиграете выборы на ходу 20. Балансируйте интересы групп!", highlight: "approval" },
+];
+
+function TutorialOverlay({ step, onNext, onDismiss }) {
+  const tutData = TUTORIAL_STEPS.find(t => t.step === step);
+  if (!tutData) return null;
+  const stepsForPhase = TUTORIAL_STEPS.filter(t => t.step === step);
+  const [subStep, setSubStep] = useState(0);
+  const current = stepsForPhase[subStep] || stepsForPhase[0];
+  const isLast = step >= 3 && subStep >= stepsForPhase.length - 1;
+
+  return (
+    <div className="fixed inset-0 z-[70] pointer-events-auto">
+      <div className="absolute inset-0 bg-black/40" />
+      <div className="absolute bottom-24 left-1/2 -translate-x-1/2 w-full max-w-sm px-4">
+        <div className="bg-white rounded-2xl shadow-xl p-5 relative pop-in">
+          <div className="text-xs text-[#4f55f1] font-bold uppercase tracking-wider mb-1">Квартал {step} — Обучение</div>
+          <div className="text-sm font-bold text-[#191c1f] mb-1">{current.title}</div>
+          <div className="text-xs text-[#6b7280] leading-relaxed mb-4">{current.text}</div>
+          <div className="flex gap-2">
+            <button onClick={() => { if (subStep < stepsForPhase.length - 1) setSubStep(subStep + 1); else onNext(); }}
+              className="flex-1 py-2.5 bg-[#191c1f] text-white text-sm font-semibold rounded-full hover:opacity-90 active:scale-[0.97] transition-all">
+              {isLast ? "Понятно!" : "Далее"}
+            </button>
+            <button onClick={onDismiss} className="px-4 py-2.5 text-[#6b7280] text-sm font-medium rounded-full border border-[#e0e0e0] hover:bg-[#f7f7f7] transition-colors">
+              Пропустить
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OvertakeToast({ msg, onDismiss }) {
   if (!msg) return null;
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
+      <ConfettiBurst />
       <FadeIn>
-        <div className="px-6 py-3 rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] flex items-center gap-3">
+        <div className="px-6 py-3 rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] flex items-center gap-3 rank-glow">
           <span className="text-sm text-[#191c1f]">{msg}</span>
           <button onClick={onDismiss} className="text-[#6b7280] hover:text-[#191c1f]"><X size={14} /></button>
         </div>
@@ -517,6 +700,30 @@ function saveDailyResult(score, grade, playStyle) {
 // RESULT CARD (shareable)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function generateEmojiGrid(metrics, grade, rankIdx, population, budget) {
+  const metricSquares = METRIC_KEYS.map(k => {
+    const v = metrics[k] || 0;
+    if (v >= 80) return "🟩";
+    if (v >= 60) return "🟨";
+    if (v >= 40) return "🟧";
+    return "🟥";
+  }).join("");
+  const metricIcons = { infrastructure:"🏗", ecology:"🌿", culture:"🎨", digital:"☁", safety:"🛡", healthcare:"❤", education:"🎓", economy:"📈" };
+  const metricLetters = METRIC_KEYS.map(k => {
+    const v = metrics[k] || 0;
+    const letter = v >= 80 ? "S" : v >= 60 ? "A" : v >= 40 ? "B" : v >= 20 ? "C" : "F";
+    return `${metricIcons[k] || "·"}${letter}`;
+  }).join(" ");
+  const today = new Date().toLocaleDateString("ru-RU", { day:"2-digit", month:"2-digit", year:"numeric" });
+  return [
+    `🏙 Звенигород #${rankIdx + 1} 📅 ${today}`,
+    metricSquares,
+    metricLetters,
+    `👥 ${population.toLocaleString("ru-RU")} | 💰 ${Math.round(budget)}M | ⭐ ${grade.letter}`,
+    "zvenigorod.netlify.app",
+  ].join("\n");
+}
+
 function shareResultCard(grade, rankIdx, population, playStyle, achievements, narrative) {
   const text = [
     `🏙️ Звенигород — ${grade.label}`,
@@ -534,8 +741,14 @@ function shareResultCard(grade, rankIdx, population, playStyle, achievements, na
   }
 }
 
-function ResultCard({ grade, rankIdx, population, playStyle, achievements, narrative, onClose }) {
+function ResultCard({ grade, rankIdx, population, playStyle, achievements, narrative, metrics, budget, onClose }) {
   const [copied, setCopied] = useState(false);
+  const [emojiCopied, setEmojiCopied] = useState(false);
+
+  const handleEmojiCopy = () => {
+    const grid = generateEmojiGrid(metrics || {}, grade, rankIdx, population, budget || 0);
+    navigator.clipboard.writeText(grid).then(() => { setEmojiCopied(true); setTimeout(() => setEmojiCopied(false), 2000); }).catch(() => {});
+  };
 
   const handleShare = () => {
     const achievementNames = achievements.slice(0, 3).map(id => {
@@ -606,6 +819,10 @@ function ResultCard({ grade, rankIdx, population, playStyle, achievements, narra
             style={{ backgroundColor: grade.color, color: "#fff" }}>
             {copied ? "✓ Скопировано!" : (navigator.share ? "Поделиться" : "Скопировать")}
           </button>
+          <button onClick={handleEmojiCopy}
+            className="px-4 py-3 rounded-2xl border border-white/20 text-white text-sm font-medium bg-white/10 backdrop-blur-sm transition-all hover:bg-white/20">
+            {emojiCopied ? "✓" : "🟩"}
+          </button>
           <button onClick={onClose}
             className="px-4 py-3 rounded-2xl border border-white/20 text-white text-sm font-medium bg-white/10 backdrop-blur-sm transition-all hover:bg-white/20">
             ✕
@@ -633,6 +850,11 @@ function StartScreen({ onStart }) {
   const todayStr = (() => { const d = new Date(); return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`; })();
   const [legacy, setLegacy] = useState(() => getLegacyState());
   const [showLegacy, setShowLegacy] = useState(false);
+  const streak = getStreak();
+  const weeklyResult = getWeeklyResult();
+  const weeklySeed = getWeeklySeed();
+  const weeklyScenarioIdx = weeklySeed % WEEKLY_SCENARIOS.length;
+  const weeklyScenario = WEEKLY_SCENARIOS[weeklyScenarioIdx];
 
   const handleUnlock = (id) => {
     unlockLegacy(id);
@@ -722,6 +944,30 @@ function StartScreen({ onStart }) {
                 className="text-xs font-bold text-[#4f55f1] hover:underline flex items-center gap-1">
                 ⚡ {dailyResult ? "Переиграть вызов дня" : "Играть вызов дня"}
               </button>
+            </div>
+
+            {/* Streak + Weekly row */}
+            <div className="flex gap-3 mb-5 w-full max-w-lg">
+              {/* Streak badge */}
+              <div className="flex-1 rounded-2xl border border-[#e8dcc8] bg-white/70 backdrop-blur-sm p-3 text-center">
+                <div className="text-2xl mb-0.5">{streak.streak >= 7 ? "🔥" : streak.streak >= 3 ? "⚡" : "📆"}</div>
+                <div className="text-lg font-bold text-[#1a1410]">{streak.streak}</div>
+                <div className="text-[9px] text-[#8a7858]">дней подряд</div>
+                {streak.streak >= 3 && <div className="text-[9px] text-[#4f55f1] font-bold mt-1">x{getStreakMultiplier(streak.streak)} очков</div>}
+              </div>
+              {/* Weekly challenge */}
+              <div className="flex-[2] rounded-2xl border border-[#e8dcc8] bg-white/70 backdrop-blur-sm p-3 text-left">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-sm">🏋️</span>
+                  <span className="text-xs font-bold text-[#1a1410]">Недельный вызов</span>
+                  {weeklyResult && <span className="text-[10px] font-bold text-[#4f55f1] bg-[#4f55f1]/10 px-1.5 py-0.5 rounded-full ml-auto">{weeklyResult.grade}</span>}
+                </div>
+                <div className="text-[10px] text-[#8a7858] mb-1.5">{weeklyScenario.name}: {weeklyScenario.desc}</div>
+                <button onClick={() => onStart(weeklyScenario.id, "hard", weeklySeed)}
+                  className="text-[10px] font-bold text-[#4f55f1] hover:underline">
+                  {weeklyResult ? "Переиграть" : "Играть"} →
+                </button>
+              </div>
             </div>
 
             {/* Legacy / meta-progression */}
@@ -1028,8 +1274,17 @@ function DecisionPhase({ state, dispatch }) {
     }, 400);
   }, [state.eventChoiceIndex, dispatch]);
 
+  const showTutorial = state.onboardingStep > 0 && state.onboardingStep <= 3 && !localStorage.getItem("zvg_tutorial_done");
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      {showTutorial && (
+        <TutorialOverlay
+          step={state.onboardingStep}
+          onNext={() => dispatch({ type: "NEXT_ONBOARDING" })}
+          onDismiss={() => { dispatch({ type: "DISMISS_ONBOARDING" }); localStorage.setItem("zvg_tutorial_done", "1"); }}
+        />
+      )}
 
       {(turn === 10 || turn === 30) && <MilestoneToast turn={turn} metrics={metrics} />}
       <FadeIn className="flex flex-col overflow-hidden h-full">
@@ -1047,14 +1302,18 @@ function DecisionPhase({ state, dispatch }) {
             </div>
             <div className="flex items-center gap-3">
 
-              <div className="flex items-center gap-1" title="Одобрение мэра">
-                <ThumbsUp size={14} className={approval >= 60 ? "text-[#00a87e]" : approval >= 40 ? "text-[#ec7e00]" : "text-[#e23b4a]"} />
-                <span className="text-sm font-bold text-[#191c1f]">{Math.round(approval)}%</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Crown size={16} className="text-[#ec7e00]" />
-                <span className="text-sm font-bold text-[#191c1f]">#{globalRankIdx + 1}</span>
-              </div>
+              <Tooltip text="Одобрение жителей. Ниже 30% — импичмент">
+                <div className="flex items-center gap-1">
+                  <ThumbsUp size={14} className={approval >= 60 ? "text-[#00a87e]" : approval >= 40 ? "text-[#ec7e00]" : "text-[#e23b4a]"} />
+                  <span className="text-sm font-bold text-[#191c1f]">{Math.round(approval)}%</span>
+                </div>
+              </Tooltip>
+              <Tooltip text="Мировой рейтинг города среди 101 города">
+                <div className="flex items-center gap-1">
+                  <Crown size={16} className="text-[#ec7e00]" />
+                  <span className="text-sm font-bold text-[#191c1f]">#{globalRankIdx + 1}</span>
+                </div>
+              </Tooltip>
             </div>
           </div>
           <div className="w-full h-0.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.06)" }}>
@@ -1064,22 +1323,26 @@ function DecisionPhase({ state, dispatch }) {
 
         {/* Stats Bar */}
         <div className="flex items-center gap-3 px-4 py-1 mx-4 rounded-xl bg-[#f7f7f7] border border-[#ebebeb] text-xs shrink-0">
-          <div className="flex items-center gap-1">
-            <Coins size={13} className={budget < 100 ? "text-[#e23b4a]" : budget < 300 ? "text-[#ec7e00]" : "text-[#ec7e00]"} />
-            <span className={`font-bold ${budget < 100 ? "text-[#e23b4a]" : budget < 300 ? "text-[#ec7e00]" : "text-[#191c1f]"}`}>{Math.round(budget)}</span>
-            <span className="text-[#9ca3af]">млн</span>
-          </div>
+          <Tooltip text="Бюджет города. Доход от налогов, расход на содержание">
+            <div className="flex items-center gap-1">
+              <Coins size={13} className={budget < 100 ? "text-[#e23b4a]" : budget < 300 ? "text-[#ec7e00]" : "text-[#ec7e00]"} />
+              <span className={`font-bold ${budget < 100 ? "text-[#e23b4a]" : budget < 300 ? "text-[#ec7e00]" : "text-[#191c1f]"}`}>{Math.round(budget)}</span>
+              <span className="text-[#9ca3af]">млн</span>
+            </div>
+          </Tooltip>
           <span className="text-[#9ca3af]">|</span>
-          <span className="text-[#00a87e]">+{revenue}</span>
-          <span className="text-[#e23b4a]">-{mandatory}</span>
-          {totalCost > 0 && <span className="text-[#ec7e00]">-{totalCost}</span>}
+          <Tooltip text="Доход от налогов и туризма"><span className="text-[#00a87e]">+{revenue}</span></Tooltip>
+          <Tooltip text="Обязательные расходы на содержание"><span className="text-[#e23b4a]">-{mandatory}</span></Tooltip>
+          {totalCost > 0 && <Tooltip text="Стоимость выбранных решений"><span className="text-[#ec7e00]">-{totalCost}</span></Tooltip>}
           {(recurringEffects.budget||0) !== 0 && <span className={recurringEffects.budget > 0 ? "text-[#00a87e]" : "text-[#e23b4a]"}>{recurringEffects.budget > 0 ? "+" : ""}{recurringEffects.budget}/ход</span>}
           {debt > 0 && <span className="text-[#e23b4a] font-bold">Долг: {Math.round(debt)}</span>}
           <div className="flex-1" />
-          <div className="flex items-center gap-1">
-            <Users size={13} className="text-[#4f55f1]" />
-            <span className="text-[#191c1f]">{population.toLocaleString("ru-RU")}</span>
-          </div>
+          <Tooltip text="Население города. Растёт при высоких метриках">
+            <div className="flex items-center gap-1">
+              <Users size={13} className="text-[#4f55f1]" />
+              <span className="text-[#191c1f]">{population.toLocaleString("ru-RU")}</span>
+            </div>
+          </Tooltip>
         </div>
 
         {/* Compact alerts row */}
@@ -1108,11 +1371,12 @@ function DecisionPhase({ state, dispatch }) {
                   const Icon = cfg.Icon;
                   const proj = projectedMetrics ? Math.round(projectedMetrics[mk]) : null;
                   const projDelta = proj !== null ? proj - v : 0;
+                  const glowClass = delta > 0 ? "metric-up" : delta < 0 ? "metric-down" : "";
                   return (
-                    <div key={mk} className={`flex items-center gap-1.5 h-5 ${critical ? "pulse-critical" : ""}`} title={`${cfg.name}: ${v}${proj !== null && projDelta !== 0 ? ` → ${proj}` : ""}`}>
+                    <div key={mk} className={`flex items-center gap-1.5 h-5 ${critical ? "pulse-critical" : ""} ${glowClass}`} title={`${cfg.name}: ${v}${proj !== null && projDelta !== 0 ? ` → ${proj}` : ""}`}>
                       <Icon size={13} style={{ color: critical ? "#ef4444" : cfg.color }} />
                       <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-[#e8e8e8] relative">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, v))}%`, backgroundColor: critical ? "#ef4444" : cfg.color }} />
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, v))}%`, backgroundColor: critical ? "#ef4444" : cfg.color, transitionTimingFunction: delta > 0 ? "cubic-bezier(0.34,1.56,0.64,1)" : "ease-out" }} />
                         {proj !== null && projDelta !== 0 && (
                           <div className="absolute top-0 h-full rounded-full transition-all duration-300 opacity-40" style={{
                             left: projDelta > 0 ? `${Math.min(100, v)}%` : `${Math.max(0, proj)}%`,
@@ -1324,7 +1588,7 @@ function DecisionPhase({ state, dispatch }) {
             {/* Tabs: Группы / Рейтинг / Соседи / Дума / Жители */}
             <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-3">
               <div className="flex gap-1 mb-3 flex-wrap">
-                {[["groups","Группы"],["rank","Рейтинг"],["rivals","Конкуренты"],["diplomacy","Соседи"],["duma","Дума"],["residents","Жители"]].map(([tab, label]) => (
+                {[["groups","Группы"],["rank","Рейтинг"],["rivals","Конкуренты"],["diplomacy","Соседи"],["duma","Дума"],["residents","Жители"],["districts","Районы"]].map(([tab, label]) => (
                   <button key={tab} onClick={() => setSidebarTab(tab)}
                     className={`relative flex-1 py-1 text-[11px] font-semibold rounded-full transition-colors ${sidebarTab === tab ? "bg-[#4f55f1] text-white" : "bg-[#e8e8e8] text-[#6b7280] hover:text-[#191c1f]"}`}>
                     {label}
@@ -1580,6 +1844,35 @@ function DecisionPhase({ state, dispatch }) {
                   })}
                 </div>
               )}
+
+              {sidebarTab === "districts" && (
+                <div className="space-y-1.5">
+                  {(state.districts || []).map(d => {
+                    const specCfg = METRICS_CFG[d.specialty];
+                    const devPct = Math.round(d.development);
+                    return (
+                      <div key={d.id} className="rounded-xl bg-[#f0f0f0] p-2 text-xs">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[#191c1f] font-semibold truncate">{d.name}</span>
+                          <span className="shrink-0 ml-1 text-[10px] font-mono" style={{ color: specCfg?.color || "#6b7280" }}>{specCfg?.name || d.specialty}</span>
+                        </div>
+                        <div className="text-[10px] text-[#9ca3af] mb-1.5 truncate">{d.desc}</div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] text-[#6b7280] w-12 shrink-0">Развитие</span>
+                          <div className="flex-1 h-1.5 rounded-full bg-[#e0e0e0] overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${devPct}%`, backgroundColor: devPct >= 60 ? "#10b981" : devPct >= 35 ? "#f59e0b" : "#ef4444" }} />
+                          </div>
+                          <span className="text-[10px] font-bold w-7 text-right" style={{ color: devPct >= 60 ? "#10b981" : devPct >= 35 ? "#f59e0b" : "#ef4444" }}>{devPct}</span>
+                        </div>
+                        <div className="flex justify-between text-[10px] text-[#9ca3af]">
+                          <span>👥 {d.population.toLocaleString("ru-RU")}</span>
+                          <span>{d.satisfaction >= 60 ? "😊" : d.satisfaction >= 40 ? "😐" : "😟"} {d.satisfaction}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1688,6 +1981,44 @@ function generateNarrative(state) {
   return parts.slice(0, 2).join(" ");
 }
 
+function generateCityChronicle(state) {
+  const { metrics, population, turn, approval, debt } = state;
+  const season = (turn - 1) % 4;
+  const avg = METRIC_KEYS.reduce((s, k) => s + (metrics[k] || 0), 0) / METRIC_KEYS.length;
+  const parts = [];
+
+  // Season atmosphere
+  const seasonTexts = [
+    ["Зима сковала Звенигород. Снег лежит на куполах Саввино-Сторожевского монастыря.", "Морозный воздух стоит над рекой. Дым из труб поднимается столбом.", "Короткий зимний день. Фонари зажигаются рано, освещая заснеженные улицы."],
+    ["Весна пришла в Звенигород. Москва-река вскрылась ото льда.", "Набережная оживает — первые велосипедисты, бегуны, мамы с колясками.", "Запах черёмухи доносится из Дютьково. Город просыпается."],
+    ["Лето в Звенигороде. Солнце заливает Верхний Посад золотом.", "На набережной купаются дети. Кафе выставили столики на улицу.", "Тёплый вечер на Почтовой улице. Музыка из открытых окон."],
+    ["Осень окрасила холмы вокруг города. Золотые берёзы над Москвой-рекой.", "Дождь стучит по крышам Саввинской слободы. Мокрые листья на тротуарах.", "Осенний Звенигород тих и задумчив. Туристы разъехались."],
+  ];
+  parts.push(seasonTexts[season][turn % seasonTexts[season].length]);
+
+  // Metric-driven atmosphere
+  if (metrics.ecology >= 70) parts.push("В парках поют птицы. Воздух чист и свеж.");
+  else if (metrics.ecology < 30) parts.push("Над городом висит серая дымка. Жители жалуются на запах.");
+  if (metrics.culture >= 70) parts.push("На улицах слышна музыка, афиши пестрят событиями.");
+  else if (metrics.culture < 25) parts.push("Культурная жизнь замерла. Молодёжь уезжает в Москву за развлечениями.");
+  if (metrics.safety >= 70) parts.push("Во дворах играют дети допоздна — родители спокойны.");
+  else if (metrics.safety < 25) parts.push("По вечерам улицы пустеют. Жители не чувствуют себя в безопасности.");
+  if (metrics.economy >= 70) parts.push("Малый бизнес процветает. Новые вывески на каждом углу.");
+  else if (metrics.economy < 25) parts.push("Закрытые магазины. На окнах объявления «Аренда».");
+  if (metrics.digital >= 70) parts.push("Wi-Fi ловит даже в парке. Город живёт в цифровом ритме.");
+  if (metrics.infrastructure < 25) parts.push("Разбитые дороги и текущие трубы — обычное дело.");
+  if (metrics.healthcare >= 70) parts.push("Поликлиника работает без очередей. Жители хвалят врачей.");
+
+  // Population/approval color
+  if (population > 35000) parts.push("На улицах оживлённо — город растёт.");
+  else if (population < 20000) parts.push("Улицы заметно опустели.");
+  if (approval >= 80) parts.push("Мэра узнают на улице, благодарят, жмут руку.");
+  else if (approval < 25) parts.push("На заборах появились надписи «Мэр — в отставку!».");
+  if (debt > 500) parts.push("Финансовая тень нависла над городом.");
+
+  return parts.slice(0, 3).join(" ");
+}
+
 function generateForesight(state) {
   const hints = [];
   const { metrics, neighborRelations, achievements, debt, approval, turn, approvalHistory } = state;
@@ -1750,6 +2081,7 @@ function ResultsPhase({ state, dispatch }) {
             <h2 className="text-xl font-bold text-[#191c1f] mb-1 slide-up">Итоги Q{(turn - 1) % 4 + 1} {2025 + Math.floor((turn - 1) / 4)}</h2>
             <p className="text-sm text-[#6b7280]">Квартал {turn} из {MAX_TURNS}</p>
             <p className="text-sm text-[#191c1f] italic mt-2">{generateNarrative(state)}</p>
+            <p className="text-xs text-[#6b7280] italic mt-2 leading-relaxed">{generateCityChronicle(state)}</p>
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-6">
@@ -1776,9 +2108,13 @@ function ResultsPhase({ state, dispatch }) {
               {METRIC_KEYS.map(k => {
                 const delta = Math.round(metrics[k] - prevMetrics[k]);
                 return (
-                  <div key={k} className="flex items-center justify-between py-1.5">
+                  <div key={k} className={`flex items-center justify-between py-1.5 relative ${delta > 0 ? "metric-up" : delta < 0 ? "metric-down" : ""}`}>
                     <div className="flex items-center gap-1.5">{React.createElement(METRICS_CFG[k].Icon, { size: 14, style: { color: METRICS_CFG[k].color } })}<span className="text-sm text-[#191c1f]">{METRICS_CFG[k].name}</span></div>
-                    <div className="flex items-center gap-2"><span className="text-sm font-bold text-[#191c1f]">{Math.round(metrics[k])}</span>{delta !== 0 && <DeltaValue value={delta} />}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-[#191c1f]">{Math.round(metrics[k])}</span>
+                      {delta !== 0 && <DeltaValue value={delta} />}
+                      {delta !== 0 && <span className={`fly-out absolute right-0 -top-2 text-xs font-bold ${delta > 0 ? "text-[#00a87e]" : "text-[#e23b4a]"}`}>{delta > 0 ? "+" : ""}{delta}</span>}
+                    </div>
                   </div>
                 );
               })}
@@ -2063,6 +2399,72 @@ function ElectionLossScreen({ state, dispatch }) {
 // END SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function getMoralVerdict(moralChoices) {
+  if (!moralChoices || moralChoices.length === 0) return null;
+  const counts = { compassionate: 0, utilitarian: 0, balanced: 0 };
+  for (const mc of moralChoices) counts[mc.moralTag] = (counts[mc.moralTag] || 0) + 1;
+  const total = moralChoices.length;
+  if (counts.compassionate >= total * 0.6) return { type: "compassionate", label: "Сострадательный мэр", icon: "💚", desc: "Вы почти всегда выбирали людей, а не цифры. Жители чувствовали заботу." };
+  if (counts.utilitarian >= total * 0.6) return { type: "utilitarian", label: "Прагматик", icon: "📊", desc: "Вы ставили результат выше чувств. Эффективно — но не все это оценили." };
+  if (counts.balanced >= total * 0.4) return { type: "balanced", label: "Дипломат", icon: "⚖️", desc: "Вы искали компромиссы. Никто не в восторге, но и не обижен." };
+  return { type: "mixed", label: "Непредсказуемый", icon: "🎲", desc: "Ваши решения не следовали одной линии. Город не знал, чего ждать." };
+}
+
+function MoralJudgment({ moralChoices, storyState, metrics }) {
+  const verdict = getMoralVerdict(moralChoices);
+  if (!verdict && (!storyState || Object.keys(storyState).length === 0)) return null;
+
+  const charOutcomes = STORY_CHARACTERS.map(char => {
+    const cs = storyState?.[char.id];
+    if (!cs || cs.outcomes.length === 0) return null;
+    const lastGood = cs.outcomes[cs.outcomes.length - 1];
+    return { ...char, good: lastGood, stepsCompleted: cs.step };
+  }).filter(Boolean);
+
+  return (
+    <div className="rounded-2xl bg-[#f7f7f7] border border-[#e0e0e0] p-6 mb-6">
+      {verdict && (
+        <>
+          <h3 className="text-sm font-bold text-[#191c1f] mb-3 flex items-center gap-2"><span className="text-lg">{verdict.icon}</span>Моральный итог</h3>
+          <div className="mb-4 p-4 rounded-xl bg-white border border-[#e8e8e8]">
+            <div className="font-semibold text-[#191c1f] mb-1">{verdict.label}</div>
+            <p className="text-sm text-[#6b7280]">{verdict.desc}</p>
+            {moralChoices.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {moralChoices.map((mc, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-[#6b7280]">
+                    <span className="shrink-0 mt-0.5">{mc.moralTag === "compassionate" ? "💚" : mc.moralTag === "utilitarian" ? "📊" : "⚖️"}</span>
+                    <span><span className="text-[#191c1f] font-medium">{mc.label}</span> — ход {mc.turn}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {charOutcomes.length > 0 && (
+        <>
+          <h3 className="text-sm font-bold text-[#191c1f] mb-3 flex items-center gap-2"><Users size={16} className="text-[#4f55f1]" />Судьбы горожан</h3>
+          <div className="space-y-2">
+            {charOutcomes.map(c => (
+              <div key={c.id} className={`flex items-start gap-3 p-3 rounded-xl border ${c.good ? "bg-[#f0faf4] border-[#b8e6cc]" : "bg-[#fdf2f2] border-[#f5c5c5]"}`}>
+                <span className="text-xl">{c.avatar}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm text-[#191c1f]">{c.name}</div>
+                  <p className="text-xs text-[#6b7280] mt-0.5">{c.good ? "Остался в городе, счастлив" : "Разочарован, уехал"}</p>
+                  <p className="text-xs text-[#9ca3af] mt-1 italic">{c.moralQuestion}</p>
+                </div>
+                <span className="text-sm">{c.good ? "✅" : "😔"}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function EndScreen({ state, onRestart, onRestartFresh }) {
   const grade = getGrade(state.globalRankIdx);
   const history = state.history;
@@ -2076,12 +2478,13 @@ function EndScreen({ state, onRestart, onRestartFresh }) {
     ? "Бюджет Звенигорода не выдержал. В следующий раз попробуйте снизить налоги для роста экономики."
     : getResultNarrative(grade.letter, playStyle, state.achievements);
 
-  // Save daily result + legacy points once + play end audio
+  // Save daily result + legacy points + streak + play end audio
   useEffect(() => {
     const zvScore = state.zvenigorodScore || 0;
     saveDailyResult(zvScore, grade.letter, playStyle);
-    const earned = addLegacyPoints(zvScore, grade.letter);
-    setLegacyEarned(earned);
+    const { streak: s, mult } = updateStreak();
+    const baseEarned = addLegacyPoints(zvScore, grade.letter);
+    setLegacyEarned(Math.round(baseEarned * mult));
     audio.gameEnd(grade.letter);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2098,6 +2501,8 @@ function EndScreen({ state, onRestart, onRestartFresh }) {
           playStyle={playStyle}
           achievements={state.achievements}
           narrative={narrative}
+          metrics={state.metrics}
+          budget={state.budget}
           onClose={() => setShowCard(false)}
         />
       )}
@@ -2203,6 +2608,8 @@ function EndScreen({ state, onRestart, onRestartFresh }) {
           </div>
         </div>
 
+        <MoralJudgment moralChoices={state.moralChoices || []} storyState={state.storyState || {}} metrics={state.metrics} />
+
         <div className="flex flex-col gap-3">
           <button onClick={onRestart} className="w-full py-4 bg-[#191c1f] text-white font-semibold rounded-full text-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.97] transition-all"><RotateCcw size={20} />Играть снова</button>
           <button onClick={onRestartFresh} className="w-full py-3 bg-transparent text-[#191c1f] font-medium rounded-full text-sm border-2 border-[#c0c0c0] flex items-center justify-center gap-2 transition-colors hover:border-[#191c1f]"><Zap size={16} />Другой сценарий</button>
@@ -2227,9 +2634,65 @@ export default function ZvenigorodMayorSim() {
   }, []);
 
   const [state, dispatch] = useReducer(legacyReducer, Date.now(), createInitialState);
+  const [shakeClass, setShakeClass] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const stopAmbientRef = useRef(null);
+
+  // Apply persisted settings on mount (reduced-motion, font-size)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (localStorage.getItem("zvg_reduced_motion") === "on") {
+      document.documentElement.classList.add("reduced-motion");
+    }
+    const fs = localStorage.getItem("zvg_fontsize");
+    if (fs === "large") document.documentElement.style.fontSize = "18px";
+  }, []);
+
+  // Global keyboard shortcuts: ? = shortcuts, S = settings, Esc = close
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
+        e.preventDefault();
+        setShowShortcuts(v => !v);
+        setShowSettings(false);
+      }
+      if (e.key === "s" || e.key === "S") {
+        if (e.ctrlKey || e.metaKey) return;
+        setShowSettings(v => !v);
+        setShowShortcuts(false);
+      }
+      if (e.key === "Escape") {
+        setShowSettings(false);
+        setShowShortcuts(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Screen shake on crisis or heavy negative events
+  useEffect(() => {
+    if (state.phase === "crisis") {
+      setShakeClass("shake-heavy");
+      setTimeout(() => setShakeClass(""), 600);
+    }
+  }, [state.phase]);
+
+  // Ambient city sound
+  useEffect(() => {
+    if (state.phase === "decisions" && state.turn > 0) {
+      const season = (state.turn - 1) % 4;
+      const avg = METRIC_KEYS.reduce((s, k) => s + (state.metrics[k] || 0), 0) / METRIC_KEYS.length;
+      if (stopAmbientRef.current) stopAmbientRef.current();
+      stopAmbientRef.current = audio.startAmbient(season, avg);
+    }
+    return () => { if (stopAmbientRef.current) { stopAmbientRef.current(); stopAmbientRef.current = null; } };
+  }, [state.phase, state.turn]);
 
   return (
-    <div className="min-h-screen bg-white text-[#191c1f] selection:bg-[#4f55f1]/30" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }}>
+    <div className={`min-h-screen bg-white text-[#191c1f] selection:bg-[#4f55f1]/30 ${shakeClass}`} style={{ fontFamily: "'Inter', -apple-system, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
@@ -2255,11 +2718,24 @@ export default function ZvenigorodMayorSim() {
         @keyframes bar-fill { 0% { width: 0%; } }
         .bar-fill { animation: bar-fill 0.8s ease-out; }
         @keyframes confetti-fall { 0% { transform: translateY(-10px) rotate(0deg); opacity:1; } 100% { transform: translateY(30px) rotate(360deg); opacity:0; } }
+        @keyframes fly-out { 0% { transform:translateY(0); opacity:1; } 100% { transform:translateY(-32px); opacity:0; } }
+        .fly-out { animation: fly-out 0.9s ease-out forwards; pointer-events:none; }
+        @keyframes metric-glow-up { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); } 50% { box-shadow: 0 0 6px 2px rgba(34,197,94,0.3); } 100% { box-shadow: none; } }
+        @keyframes metric-glow-down { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 6px 2px rgba(239,68,68,0.3); } 100% { box-shadow: none; } }
+        .metric-up { animation: metric-glow-up 0.6s ease-out; }
+        .metric-down { animation: metric-glow-down 0.6s ease-out; }
+        @keyframes confetti-burst { 0% { transform: translate(var(--cx),0) rotate(0deg); opacity:1; } 100% { transform: translate(var(--ex), var(--ey)) rotate(var(--er)); opacity:0; } }
+        .confetti-particle { animation: confetti-burst 1.2s cubic-bezier(0.25,0.46,0.45,0.94) forwards; pointer-events:none; }
+        @keyframes shake-heavy { 0%,100% { transform:translateX(0); } 10%,30%,50%,70%,90% { transform:translateX(-4px); } 20%,40%,60%,80% { transform:translateX(4px); } }
+        .shake-heavy { animation: shake-heavy 0.5s ease-in-out; }
+        @keyframes ripple-out { 0% { transform:scale(0); opacity:0.4; } 100% { transform:scale(2.5); opacity:0; } }
         .decision-selected { transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1); }
         .hover-lift { transition: transform 0.15s ease; }
         .hover-lift:hover { transform: translateY(-1px); }
         @keyframes ob-fade-in { 0% { opacity:0; transform:translateY(14px); } 100% { opacity:1; transform:translateY(0); } }
         .ob-step { animation: ob-fade-in 0.28s ease-out; }
+        .reduced-motion *, .reduced-motion *::before, .reduced-motion *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
       `}</style>
       {state.phase === "start" && <StartScreen onStart={(scenarioId, difficultyId, seed) => dispatch({ type: "START_GAME", seed: seed || Date.now(), scenarioId, difficultyId })} />}
       {state.phase === "crisis" && <CrisisPhase state={state} dispatch={dispatch} />}
@@ -2271,6 +2747,21 @@ export default function ZvenigorodMayorSim() {
       {state.phase === "election_result" && <ElectionVote state={state} dispatch={dispatch} />}
       {state.phase === "election_loss" && <ElectionLossScreen state={state} dispatch={dispatch} />}
       {state.phase === "end" && <EndScreen state={state} onRestart={() => dispatch({ type: "RESTART" })} onRestartFresh={() => dispatch({ type: "RESTART_FRESH" })} />}
+
+      {/* Floating gear button — visible during gameplay phases */}
+      {state.phase !== "start" && state.phase !== "end" && (
+        <button
+          onClick={() => setShowSettings(true)}
+          className="fixed bottom-4 right-4 z-40 w-9 h-9 rounded-full bg-white/90 shadow-lg border border-[#e0e0e0] flex items-center justify-center hover:bg-[#f0f0f0] transition-colors backdrop-blur-sm"
+          title="Настройки (S)"
+        >
+          <Settings size={16} className="text-[#6b7280]" />
+        </button>
+      )}
+
+      {/* Settings & shortcuts overlays */}
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showShortcuts && <KeyboardShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
     </div>
   );
 }

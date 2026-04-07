@@ -6,11 +6,11 @@ import { createRNG } from "./random.js";
 import {
   METRIC_KEYS, GROUPS,
   INIT_METRICS, INIT_BUDGET, INIT_POP, MAX_TURNS, ELECTION_TURN, MAX_PICKS,
-  INIT_APPROVAL, DIFFICULTIES, SCENARIOS,
+  INIT_APPROVAL, DIFFICULTIES, SCENARIOS, WEEKLY_SCENARIOS, DISTRICTS,
 } from "./constants.js";
 import { WORLD_CITIES } from "./cities.js";
 import { ALL_DECISIONS } from "./decisions.js";
-import { ALL_EVENTS, ADVISORS, OPPONENTS, ACHIEVEMENTS, ELECTION_PROMISES } from "./events.js";
+import { ALL_EVENTS, ADVISORS, OPPONENTS, ACHIEVEMENTS, ELECTION_PROMISES, STORY_CHARACTERS, SEASONAL_EVENTS } from "./events.js";
 import {
   applyDecay, applySeason, clampMetrics,
   calcGroupSatisfactions, calcAvgSatisfaction,
@@ -56,6 +56,71 @@ function checkAchievements(state) {
     if (a.cond(state)) newAch.push(a.id);
   }
   return newAch;
+}
+
+function initDistricts() {
+  return DISTRICTS.map(d => ({
+    id: d.id, name: d.name, specialty: d.specialty,
+    development: 30, satisfaction: 50, population: d.population,
+    desc: d.desc,
+  }));
+}
+
+function processDistricts(districts, metrics) {
+  return districts.map(d => {
+    const spec = d.specialty;
+    const metricVal = metrics[spec] || 50;
+    const devDelta = (metricVal - 50) * 0.05;
+    const newDev = Math.max(0, Math.min(100, d.development + devDelta));
+    const newSat = Math.round(metricVal * 0.6 + newDev * 0.4);
+    return { ...d, development: Math.round(newDev * 10) / 10, satisfaction: newSat };
+  });
+}
+
+function selectStoryEvent(state) {
+  const nextTurn = (state.turn || 0) + 1;
+  const ss = state.storyState || {};
+  for (const char of STORY_CHARACTERS) {
+    const charState = ss[char.id] || { step: 0, outcomes: [] };
+    if (charState.step >= char.arc.length) continue;
+    const arc = char.arc[charState.step];
+    if (nextTurn < arc.minTurn || nextTurn > arc.maxTurn) continue;
+    if ((state.usedEventIds || []).includes(arc.eventId)) continue;
+
+    let text, rawEffects, isGood = null;
+    if (arc.textGood !== undefined) {
+      if (arc.requires) {
+        isGood = true;
+        for (const [k, v] of Object.entries(arc.requires)) {
+          if ((state.metrics[k] || 0) < v) { isGood = false; break; }
+        }
+      } else {
+        isGood = charState.outcomes.length > 0 && charState.outcomes[charState.outcomes.length - 1];
+      }
+      text = isGood ? arc.textGood : arc.textBad;
+      rawEffects = isGood ? (arc.effectsGood || {}) : (arc.effectsBad || {});
+    } else {
+      text = arc.text;
+      rawEffects = arc.effects || {};
+    }
+
+    const effects = {};
+    let approval = arc.approval || 0;
+    let population = 0;
+    let budget = arc.budget || 0;
+    for (const [k, v] of Object.entries(rawEffects)) {
+      if (k === "approval") approval += v;
+      else if (k === "population") population += v;
+      else if (k === "budget") budget += v;
+      else effects[k] = v;
+    }
+
+    return {
+      id: arc.eventId, text, effects, approval, population, budget,
+      storyCharId: char.id, storyStep: charState.step, storyOutcome: isGood,
+    };
+  }
+  return null;
 }
 
 // ── Exported helpers ──
@@ -147,6 +212,12 @@ export function selectEvent(state, rng) {
   const eventProb = (state.difficulty || {}).eventProb || 0.4;
   const queued = (eventQueue || []).filter(q => q.targetTurn === turn + 1);
   if (queued.length > 0) return ALL_EVENTS.find(e => e.id === queued[0].eventId) || null;
+  // Seasonal real-world events (one per game max each)
+  const now = new Date();
+  const seasonal = SEASONAL_EVENTS.find(e => e.dateCheck(now) && !(usedEventIds || []).includes(e.id));
+  if (seasonal && rng.next() < 0.5) return { id: seasonal.id, text: seasonal.text, effects: seasonal.effects, budget: seasonal.budget || 0, population: seasonal.population || 0 };
+  const storyEvt = selectStoryEvent(state);
+  if (storyEvt) return storyEvt;
   if (rng.next() > eventProb) return null;
   const season = (turn + 1) % 4;
   const eligible = ALL_EVENTS.filter(e => {
@@ -165,7 +236,7 @@ export function selectEvent(state, rng) {
 
 export function createInitialState(seed, scenarioId = "standard", difficultyId = "normal") {
   const rng = createRNG(seed);
-  const scenario = SCENARIOS.find(s => s.id === scenarioId) || SCENARIOS[0];
+  const scenario = SCENARIOS.find(s => s.id === scenarioId) || WEEKLY_SCENARIOS.find(s => s.id === scenarioId) || SCENARIOS[0];
   const difficulty = DIFFICULTIES[difficultyId] || DIFFICULTIES.normal;
 
   let metrics = { ...INIT_METRICS };
@@ -228,6 +299,10 @@ export function createInitialState(seed, scenarioId = "standard", difficultyId =
     activeCrisis: null, resolvedCrises: [], crisisActionChosen: false,
     // v3 Diplomacy
     neighborRelations, diplomaticResults: [], completedJointProjects: [],
+    // v3 Story & Moral
+    storyState: {}, moralChoices: [],
+    // v3 Districts
+    districts: initDistricts(),
   };
 }
 
@@ -252,6 +327,8 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   let approvalDelta = 0;
   let newDebt = state.debt || 0;
   let eventNewsText = null;
+  let newStoryState = { ...(state.storyState || {}) };
+  let newMoralChoices = [...(state.moralChoices || [])];
 
   // ── 1. Apply current event ──
   if (state.currentEvent) {
@@ -276,6 +353,16 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
       if (evt.approval) approvalDelta += evt.approval;
       if (evt.setCostMultiplier) { newCostMultiplier = 1.2; newCostMultiplierTurns = 3; }
       if (evt.randomCulture) metrics.culture += rng.nextInt(-2, 3);
+    }
+    // ── 1b. Moral choice tracking ──
+    if (evt.isMoral && eventChoiceIndex != null) {
+      const mc = evt.choices?.[eventChoiceIndex];
+      if (mc) newMoralChoices = [...newMoralChoices, { eventId: evt.id, choiceIndex: eventChoiceIndex, moralTag: mc.moralTag || "unknown", turn: state.turn + 1, label: mc.label, text: evt.text }];
+    }
+    // ── 1c. Story state advancement ──
+    if (evt.storyCharId != null) {
+      const prev = newStoryState[evt.storyCharId] || { step: 0, outcomes: [] };
+      newStoryState = { ...newStoryState, [evt.storyCharId]: { step: prev.step + 1, outcomes: [...prev.outcomes, evt.storyOutcome] } };
     }
   }
 
@@ -451,6 +538,9 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   // ── 11. Economy update ──
   const newEconomy = updateEconomy(state.economy || createInitialEconomy(), metrics, population);
 
+  // ── 11b. District processing ──
+  const newDistricts = processDistricts(state.districts || initDistricts(), metrics);
+
   // ── 12. Satisfaction, migration, rank ──
   const satisfactions = calcGroupSatisfactions(metrics);
   const avgSat = calcAvgSatisfaction(satisfactions);
@@ -559,7 +649,7 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
   const nextTurn = state.turn + 1;
   let nextEvent = null;
   if (nextTurn < MAX_TURNS && !defaulted && nextTurn !== ELECTION_TURN) {
-    nextEvent = selectEvent({ ...state, eventQueue: newEventQueue, turn: state.turn, metrics, usedEventIds: newUsedEventIds, globalRankIdx, difficulty: state.difficulty }, rng);
+    nextEvent = selectEvent({ ...state, eventQueue: newEventQueue, turn: state.turn, metrics, usedEventIds: newUsedEventIds, globalRankIdx, difficulty: state.difficulty, storyState: newStoryState }, rng);
   }
   let nextDecisions = [];
   if (nextTurn < MAX_TURNS && !defaulted && nextTurn !== ELECTION_TURN) {
@@ -602,6 +692,8 @@ export function processTurn(state, selectedIds, eventChoiceIndex) {
     seasonCostMod, respondedLetters: [],
     rivalCities: updatedRivals, rivalNews,
     dynamicCities: updatedDynamic,
+    storyState: newStoryState, moralChoices: newMoralChoices,
+    districts: newDistricts,
   };
 }
 
@@ -752,9 +844,9 @@ export function gameReducer(state, action) {
 // ── Re-exports for UI convenience ──
 
 export { METRIC_KEYS, MAX_TURNS, MAX_PICKS, ELECTION_TURN, INIT_POP };
-export { METRICS_CFG, GROUPS, DIFFICULTIES, SCENARIOS } from "./constants.js";
+export { METRICS_CFG, GROUPS, DIFFICULTIES, SCENARIOS, WEEKLY_SCENARIOS } from "./constants.js";
 export { ALL_DECISIONS };
-export { ALL_EVENTS, ADVISORS, OPPONENTS, ACHIEVEMENTS, ELECTION_PROMISES };
+export { ALL_EVENTS, ADVISORS, OPPONENTS, ACHIEVEMENTS, ELECTION_PROMISES, STORY_CHARACTERS, SEASONAL_EVENTS };
 export { WORLD_CITIES };
 export { RIVAL_CITIES } from "./rivalCities.js";
 export { getGrade, getPlayStyle };

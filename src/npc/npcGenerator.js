@@ -43,7 +43,8 @@ export function generateNPC(rng, group, id) {
   const age = rng.nextInt(minAge, maxAge);
   const occupation = rng.pick(OCCUPATIONS[group] || OCCUPATIONS.families);
   const personality = rng.pick(PERSONALITY_TYPES);
-  const district = rng.pick(DISTRICTS);
+  const districtObj = rng.pick(DISTRICTS);
+  const district = districtObj.name;
   const avatar = rng.pick(AVATARS[group] || ["🧑"]);
 
   // Pick 2-3 needs from group needs, shuffled
